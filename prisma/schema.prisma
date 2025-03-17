@@ -1,0 +1,201 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Add these NextAuth-specific models if they don't exist
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?    // Add this field
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  brevoKeys     BrevoKey[]
+  contacts      Contact[]
+  contactGroups ContactGroup[]
+  campaigns     Campaign[]
+  accounts      Account[]    // Add this relation
+  sessions      Session[]    // Add this relation
+  emailTemplates EmailTemplate[]
+}
+model BrevoKey {
+  id           String    @id @default(uuid())
+  name         String
+  apiKey       String
+  smtpUsername String
+  smtpPassword String
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  campaigns    Campaign[]
+
+  @@index([userId])
+}
+
+model Contact {
+  id             String           @id @default(uuid())
+  email          String
+  additionalData Json?
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  groupContacts  GroupContact[]
+
+  @@unique([email, userId])
+  @@index([userId])
+  EmailDelivery EmailDelivery[]
+}
+
+model ContactGroup {
+  id            String          @id @default(uuid())
+  name          String
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  groupContacts GroupContact[]
+  campaigns     Campaign[]
+
+  @@index([userId])
+}
+
+model GroupContact {
+  id             String        @id @default(uuid())
+  contactId      String
+  contact        Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactGroupId String
+  contactGroup   ContactGroup  @relation(fields: [contactGroupId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+
+  @@unique([contactId, contactGroupId])
+  @@index([contactId])
+  @@index([contactGroupId])
+}
+
+// prisma/schema.prisma (modified Campaign model)
+model Campaign {
+  id           String       @id @default(uuid())
+  name         String
+  subject      String
+  senderName   String
+  senderEmail  String
+  content      String       // This will now store HTML content
+  status       CampaignStatus @default(DRAFT)
+  schedule     DateTime?
+  brevoKeyId   String?
+  brevoKey     BrevoKey?     @relation(fields: [brevoKeyId], references: [id])
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId      String
+  group        ContactGroup  @relation(fields: [groupId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([brevoKeyId])
+  @@index([groupId])
+  EmailDelivery EmailDelivery[]
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+}
+
+// prisma/schema.prisma - Add this model
+
+model EmailDelivery {
+  id          String         @id @default(uuid())
+  campaignId  String
+  campaign    Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId   String
+  contact     Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status      EmailStatus    @default(PENDING)
+  messageId   String?        // The ID returned by the email provider
+  sentAt      DateTime?
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  errorMessage String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([campaignId])
+  @@index([contactId])
+  @@unique([campaignId, contactId])
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  FAILED
+}
+
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  content     String   @db.Text
+  htmlContent String   @db.Text
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
