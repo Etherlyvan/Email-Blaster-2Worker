@@ -1,88 +1,51 @@
-Email Campaign App: Aplikasi Manajemen Kampanye Email
-
-
+# Email Campaign App: Aplikasi Manajemen Kampanye Email
 
 Aplikasi berbasis web untuk membuat, mengelola, dan mengirim kampanye email dengan antarmuka visual yang intuitif.
 
+## Fitur Utama
 
+- Editor visual untuk membuat email dengan mudah
+- Dukungan variabel template untuk personalisasi email
+- Manajemen kontak dan grup penerima
+- Penjadwalan pengiriman kampanye
+- Analitik dan pelacakan performa kampanye
+- Pengelolaan template email
 
-Fitur Utama
+## Teknologi yang Digunakan
 
+- **Frontend**: Next.js, React, Tailwind CSS, Lexical Editor
+- **Backend**: Node.js, Express
+- **Database**: PostgreSQL
+- **Containerization**: Docker
+- **Deployment**: Docker Compose
 
-
-Editor visual untuk membuat email dengan mudah
-
-Dukungan variabel template untuk personalisasi email
-
-Manajemen kontak dan grup penerima
-
-Penjadwalan pengiriman kampanye
-
-Analitik dan pelacakan performa kampanye
-
-Pengelolaan template email
-
-
-
-Teknologi yang Digunakan
-
-
-
-Frontend: Next.js, React, Tailwind CSS, Lexical Editor
-
-Backend: Node.js, Express
-
-Database: PostgreSQL
-
-Containerization: Docker
-
-Deployment: Docker Compose
-
-
-
-Panduan Setup dengan Docker
-
-
+## Panduan Setup dengan Docker
 
 Berikut langkah-langkah untuk mengatur dan menjalankan aplikasi menggunakan Docker:
 
+### Prasyarat
 
+- [Docker](https://docs.docker.com/get-docker/) dan [Docker Compose](https://docs.docker.com/compose/install/) terinstal di sistem Anda
+- [Git](https://git-scm.com/downloads) untuk mengkloning repositori
 
-Prasyarat
+### Langkah 1: Kloning Repositori
 
-
-
-Docker dan Docker Compose terinstal di sistem Anda
-
-Git untuk mengkloning repositori
-
-
-
-Langkah 1: Kloning Repositori
-
-
-
+```bash
 git clone https://github.com/username/email-campaign-app.git
 cd email-campaign-app
+```
 
+### Langkah 2: Konfigurasi Environment Variables
 
+Salin file `.env.example` menjadi `.env` dan sesuaikan variabel lingkungan sesuai kebutuhan:
 
-Langkah 2: Konfigurasi Environment Variables
-
-
-
-Salin file .env.example menjadi .env dan sesuaikan variabel lingkungan sesuai kebutuhan:
-
-
-
+```bash
 cp .env.example .env
+```
 
+Edit file `.env` dengan editor teks pilihan Anda dan sesuaikan nilai-nilai berikut:
 
-
-Edit file .env dengan editor teks pilihan Anda dan sesuaikan nilai-nilai berikut:
-
-
-
+```javascript
 # Database Configuration
 DB_HOST=postgres
 DB_PORT=5432
@@ -102,59 +65,42 @@ SMTP_FROM_NAME=Email Campaign App
 APP_URL=http://localhost:3000
 API_URL=http://localhost:3001
 NODE_ENV=development
+```
 
+### Langkah 3: Membangun dan Menjalankan Container Docker
 
-
-Langkah 3: Membangun dan Menjalankan Container Docker
-
-
-
+```bash
 # Membangun image Docker
 docker-compose build
 
 # Menjalankan aplikasi
 docker-compose up -d
+```
 
+Perintah ini akan membangun dan menjalankan semua layanan yang didefinisikan dalam `docker-compose.yml`, termasuk frontend, backend, dan database.
 
-
-Perintah ini akan membangun dan menjalankan semua layanan yang didefinisikan dalam docker-compose.yml, termasuk frontend, backend, dan database.
-
-
-
-Langkah 4: Inisialisasi Database
-
-
+### Langkah 4: Inisialisasi Database
 
 Jalankan migrasi database untuk membuat skema dan tabel yang diperlukan:
 
-
-
+```bash
 # Menjalankan migrasi database
 docker-compose exec backend npm run migrate
 
 # (Opsional) Menambahkan data sampel
 docker-compose exec backend npm run seed
+```
 
-
-
-Langkah 5: Akses Aplikasi
-
-
+### Langkah 5: Akses Aplikasi
 
 Setelah semua container berjalan, Anda dapat mengakses aplikasi melalui browser:
 
+- **Frontend**: http://localhost:3000
+- **API Backend**: http://localhost:3001
 
+### Struktur Direktori Docker
 
-Frontend: http://localhost:3000
-
-API Backend: http://localhost:3001
-
-
-
-Struktur Direktori Docker
-
-
-
+```javascript
 email-campaign-app/
 ├── docker-compose.yml        # Konfigurasi layanan Docker
 ├── Dockerfile.frontend       # Dockerfile untuk frontend
@@ -162,13 +108,11 @@ email-campaign-app/
 ├── frontend/                 # Kode sumber frontend
 ├── backend/                  # Kode sumber backend
 └── postgres/                 # Volume dan konfigurasi database
+```
 
+### Perintah Docker Berguna
 
-
-Perintah Docker Berguna
-
-
-
+```bash
 # Melihat log aplikasi
 docker-compose logs -f
 
@@ -187,94 +131,60 @@ docker-compose up -d
 docker-compose exec frontend sh
 docker-compose exec backend sh
 docker-compose exec postgres psql -U postgres -d emailcampaign
+```
 
-
-
-Pengembangan Lokal Tanpa Docker
-
-
+## Pengembangan Lokal Tanpa Docker
 
 Jika Anda ingin menjalankan aplikasi secara lokal tanpa Docker:
 
+### Setup Frontend
 
-
-Setup Frontend
-
-
-
+```bash
 cd frontend
 npm install
 npm run dev
+```
 
+### Setup Backend
 
-
-Setup Backend
-
-
-
+```bash
 cd backend
 npm install
 npm run dev
-
-
+```
 
 Pastikan Anda memiliki PostgreSQL yang berjalan dan telah mengonfigurasi variabel lingkungan dengan benar.
 
+## Kontribusi
 
+Kontribusi sangat dihargai! Silakan lihat [CONTRIBUTING.md](CONTRIBUTING.md) untuk detail tentang proses pengiriman pull request.
 
-Kontribusi
+## Lisensi
 
-
-
-Kontribusi sangat dihargai! Silakan lihat CONTRIBUTING.md untuk detail tentang proses pengiriman pull request.
-
-
-
-Lisensi
-
-
-
-Proyek ini dilisensikan di bawah MIT License.
+Proyek ini dilisensikan di bawah [MIT License](LICENSE).
 
 
 
 
+## Troubleshooting
 
+### Masalah Umum
 
-Troubleshooting
+1. **Database tidak dapat diakses**:
 
+- Pastikan container PostgreSQL berjalan: `docker-compose ps`
+- Periksa log database: `docker-compose logs postgres`
+- Pastikan kredensial database di file `.env` benar
 
+2. **Perubahan kode tidak terlihat**:
 
-Masalah Umum
+- Untuk pengembangan, gunakan volume yang dipetakan di `docker-compose.yml`
+- Jika menggunakan build produksi, rebuild image: `docker-compose build frontend`
 
+3. **Port sudah digunakan**:
 
+- Ubah pemetaan port di `docker-compose.yml` jika port 3000 atau 3001 sudah digunakan di mesin Anda
 
-Database tidak dapat diakses:
+### Mendapatkan Bantuan
 
-Pastikan container PostgreSQL berjalan: docker-compose ps
-
-Periksa log database: docker-compose logs postgres
-
-Pastikan kredensial database di file .env benar
-
-
-
-Perubahan kode tidak terlihat:
-
-Untuk pengembangan, gunakan volume yang dipetakan di docker-compose.yml
-
-Jika menggunakan build produksi, rebuild image: docker-compose build frontend
-
-
-
-Port sudah digunakan:
-
-Ubah pemetaan port di docker-compose.yml jika port 3000 atau 3001 sudah digunakan di mesin Anda
-
-
-
-Mendapatkan Bantuan
-
-
-
-Jika Anda mengalami masalah lain, silakan buka issue di GitHub repository atau hubungi tim pengembang di support@example.com.
+Jika Anda mengalami masalah lain, silakan buka issue di GitHub repository atau hubungi tim pengembang di [support@example.com](mailto:support@example.com).
