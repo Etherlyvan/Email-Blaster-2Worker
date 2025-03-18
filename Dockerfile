@@ -1,4 +1,3 @@
-# Dockerfile
 FROM node:18-alpine AS base
 
 # Install dependencies only when needed
@@ -28,6 +27,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/docker-compose.yml ./
+COPY --from=builder /app/workers ./workers
 
 USER nextjs
 

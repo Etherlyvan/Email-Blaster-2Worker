@@ -1,4 +1,3 @@
-# workers/Dockerfile.scheduler
 FROM node:18-alpine
 
 WORKDIR /app
