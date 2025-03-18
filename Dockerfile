@@ -1,39 +1,28 @@
-FROM node:18-alpine AS base
+FROM node:18-alpine
 
-# Install dependencies only when needed
-FROM base AS deps
 WORKDIR /app
+
+# Install necessary tools
+RUN apk add --no-cache bash supervisor
+
+# Copy package files and install dependencies
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Copy application code
 COPY . .
+
+# Generate Prisma client
 RUN npx prisma generate
+
+# Build the Next.js application
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
-WORKDIR /app
+# Setup supervisord to manage multiple processes
+COPY supervisord.conf /etc/supervisord.conf
 
-ENV NODE_ENV production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/docker-compose.yml ./
-COPY --from=builder /app/workers ./workers
-
-USER nextjs
-
+# Expose the application port
 EXPOSE 3000
 
-ENV PORT 3000
-
-CMD ["node", "server.js"]
+# Start supervisord which will manage all processes
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
