@@ -14,16 +14,14 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+# Compile worker TypeScript files
+RUN npx tsc --project tsconfig.worker.json
+
 # Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
-
-# Install ts-node and typescript globally with the correct path
-RUN npm install -g ts-node typescript
-# Make sure the global npm bin directory is in PATH
-ENV PATH /usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/app/node_modules/.bin
 
 # Copy necessary files
 COPY --from=builder /app/node_modules ./node_modules
@@ -31,14 +29,15 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/workers ./workers
-COPY --from=builder /app/lib ./lib
-COPY --from=builder /app/tsconfig.json ./
-COPY --from=builder /app/tsconfig.worker.json ./
-COPY supervisord.conf /etc/supervisord.conf
+COPY --from=builder /app/dist ./dist
+
+# Create and copy the start script
+COPY --from=builder /app/start.sh ./
+RUN chmod +x start.sh
 
 EXPOSE 3000
 
 ENV PORT 3000
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+# Use the start script as the entry point
+CMD ["./start.sh"]
