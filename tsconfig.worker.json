@@ -2,9 +2,12 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
-    "outDir": "./dist",
-    "noEmit": false,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "target": "es2018",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "outDir": "dist",
+    "skipLibCheck": true
   },
   "include": ["workers/**/*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules"]
