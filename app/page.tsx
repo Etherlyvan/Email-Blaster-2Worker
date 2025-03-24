@@ -1,6 +1,5 @@
 // app/page.tsx
-import Link from "next/link";
-import { Button } from "../components/ui/Button";
+import { GoogleLoginButton } from "../components/auth/GoogleLoginButton";
 
 export default function Home() {
   return (
@@ -18,9 +17,7 @@ export default function Home() {
               Create and manage email campaigns with ease. Connect with your audience through personalized, professional emails.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
-              <Link href="/dashboard">
-                <Button size="lg">Get Started</Button>
-              </Link>
+              <GoogleLoginButton />
             </div>
           </div>
         </div>

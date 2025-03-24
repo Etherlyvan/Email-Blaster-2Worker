@@ -354,13 +354,13 @@ export function CampaignForm({
       </div>
       
       <div className="flex justify-end space-x-4">
-        <Button onClick={handleCancel} variant="outline">
+        <Button onClick={handleCancel} variant="danger">
           Cancel
         </Button>
-        <Button onClick={handleSaveAsDraft} loading={isSubmitting}>
+        <Button variant = "secondary" onClick={handleSaveAsDraft} loading={isSubmitting}>
           Save as Draft
         </Button>
-        <Button onClick={handleSendNow} loading={isSubmitting}>
+        <Button variant="primary" onClick={handleSendNow} loading={isSubmitting}>
           {initialData?.schedule ? "Schedule" : "Send Now"}
         </Button>
       </div>

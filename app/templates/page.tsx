@@ -5,12 +5,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
+import { TemplateGallery } from "../../components/templates/TemplateGallery";
+import { PlusIcon } from '@heroicons/react/24/outline';
 
 interface EmailTemplate {
   id: string;
   name: string;
   description: string;
+  htmlContent: string;  // Ditambahkan untuk TemplateGallery
   createdAt: string;
   updatedAt: string;
 }
@@ -37,14 +39,40 @@ export default function TemplatesPage() {
   }, []);
   
   if (isLoading) {
-    return <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">Loading templates...</div>;
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="h-8 bg-gray-200 rounded w-40"></div>
+            <div className="h-10 bg-gray-200 rounded w-32"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, index) => (
+              <div key={`skeleton-${index}`} className="bg-gray-100 rounded-lg h-48"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
   
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4">
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="font-medium">Error loading templates</p>
+            <p className="text-sm">{error}</p>
+          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="ml-auto bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1 rounded-md text-sm"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -53,48 +81,20 @@ export default function TemplatesPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Email Templates</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Email Templates</h1>
           <Link href="/templates/create">
-            <Button>Create Template</Button>
+            <Button 
+              variant="primary"
+              icon={<PlusIcon className="h-5 w-5 mr-1" />}
+            >
+              Create Template
+            </Button>
           </Link>
         </div>
         
-        {templates.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {templates.map((template) => (
-              <Card key={template.id}>
-                <div className="p-6">
-                  <h2 className="text-lg font-medium text-gray-900">{template.name}</h2>
-                  <p className="mt-2 text-sm text-gray-500 line-clamp-2">{template.description}</p>
-                  <p className="mt-2 text-xs text-gray-400">Updated {new Date(template.updatedAt).toLocaleDateString()}</p>
-                  <div className="mt-4 flex justify-between">
-                    <Link href={`/templates/${template.id}`}>
-                      <Button variant="outline" size="sm">Edit</Button>
-                    </Link>
-                    <Link href={`/campaigns/create?templateId=${template.id}`}>
-                      <Button size="sm">Use in Campaign</Button>
-                    </Link>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <div className="p-6 text-center">
-              <h2 className="text-lg font-medium text-gray-900">No templates yet</h2>
-              <p className="mt-2 text-sm text-gray-500">
-                Create your first email template to get started.
-              </p>
-              <div className="mt-4">
-                <Link href="/templates/create">
-                  <Button>Create Template</Button>
-                </Link>
-              </div>
-            </div>
-          </Card>
-        )}
+        {/* Menggunakan TemplateGallery yang telah ditingkatkan */}
+        <TemplateGallery templates={templates} />
       </div>
     </div>
   );

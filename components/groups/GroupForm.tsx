@@ -87,7 +87,6 @@ export function GroupForm({ onSuccess, initialData }: GroupFormProps) {
       <div className="flex justify-end space-x-4">
         <Button
           type="button"
-          variant="outline"
           onClick={() => router.back()}
         >
           Cancel

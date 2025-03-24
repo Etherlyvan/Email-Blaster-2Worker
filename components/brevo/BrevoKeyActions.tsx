@@ -55,7 +55,7 @@ export function BrevoKeyActions({ keyId, isActive }: BrevoKeyActionsProps) {
       <div className="flex space-x-2">
         <Button
           type="button"
-          variant="outline"
+          variant="info"
           size="sm"
           onClick={() => setShowTestModal(true)}
         >
@@ -63,7 +63,7 @@ export function BrevoKeyActions({ keyId, isActive }: BrevoKeyActionsProps) {
         </Button>
         <Button
           type="button"
-          variant="outline"
+          variant="warning"
           size="sm"
           onClick={handleToggleStatus}
           loading={isToggling}

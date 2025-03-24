@@ -103,7 +103,7 @@ export function GroupDetail({
         <h1 className="text-2xl font-bold">Group: {group.name}</h1>
         <div className="flex gap-2">
           <Link href="/groups">
-            <Button variant="outline">Back to Groups</Button>
+            <Button variant="warning">Back to Groups</Button>
           </Link>
           <Button 
             variant="danger" 
@@ -138,8 +138,8 @@ export function GroupDetail({
               />
             </div>
             <Button 
-              type="submit" 
-              size="sm" 
+              variant="success"
+              type="submit"
               loading={isUpdatingName}
               disabled={!groupName.trim() || groupName === group.name}
             >
@@ -241,10 +241,11 @@ export function GroupDetail({
               <h2 className="text-lg font-medium">Group Management</h2>
               <div className="flex gap-2">
                 <Link href="/contacts/import">
-                  <Button variant="outline">Import Contacts</Button>
+                  <Button variant="secondary">Import Contacts</Button>
                 </Link>
                 <Link href={`/contacts?groupId=${group.id}`}>
-                  <Button>View All Contacts</Button>
+                  <Button
+                  variant="info">View All Contacts</Button>
                 </Link>
               </div>
             </div>

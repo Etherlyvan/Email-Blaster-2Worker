@@ -58,7 +58,7 @@ async function DashboardContent() {
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <Link href="/campaigns/create">
-            <Button>Create Campaign</Button>
+            <Button variant="primary">Create Campaign</Button>
           </Link>
         </div>
         
@@ -69,7 +69,7 @@ async function DashboardContent() {
               <p className="mt-2 text-3xl font-bold">{contactCount}</p>
               <div className="mt-4">
                 <Link href="/contacts">
-                  <Button variant="outline" size="sm">View All</Button>
+                  <Button variant="info" size="sm">View All</Button>
                 </Link>
               </div>
             </div>
@@ -81,7 +81,7 @@ async function DashboardContent() {
               <p className="mt-2 text-3xl font-bold">{groupCount}</p>
               <div className="mt-4">
                 <Link href="/groups">
-                  <Button variant="outline" size="sm">View All</Button>
+                  <Button variant="info" size="sm">View All</Button>
                 </Link>
               </div>
             </div>
@@ -93,7 +93,7 @@ async function DashboardContent() {
               <p className="mt-2 text-3xl font-bold">{campaignCount}</p>
               <div className="mt-4">
                 <Link href="/campaigns">
-                  <Button variant="outline" size="sm">View All</Button>
+                  <Button variant="info" size="sm">View All</Button>
                 </Link>
               </div>
             </div>
@@ -105,7 +105,7 @@ async function DashboardContent() {
               <p className="mt-2 text-3xl font-bold">{brevoKeyCount}</p>
               <div className="mt-4">
                 <Link href="/settings">
-                  <Button variant="outline" size="sm">Manage</Button>
+                  <Button variant="info" size="sm">Manage</Button>
                 </Link>
               </div>
             </div>

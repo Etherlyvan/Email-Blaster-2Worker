@@ -70,10 +70,10 @@ export default function ContactsPage() {
           <h1 className="text-2xl font-bold">Contacts</h1>
           <div className="flex gap-2">
             <Link href="/contacts/import">
-              <Button variant="outline">Import Contacts</Button>
+              <Button variant="secondary">Import Contacts</Button>
             </Link>
             <Link href="/contacts/create">
-              <Button>Add Contact</Button>
+              <Button variant="primary">Add Contact</Button>
             </Link>
           </div>
         </div>

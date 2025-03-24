@@ -1,13 +1,25 @@
+// components/templates/TemplateEditor.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { EmailEditor } from "../editor/EmailEditor";
 import { EmailPreview } from "../editor/EmailPreview";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import { Tab } from "@headlessui/react";
+import { 
+  PencilIcon, 
+  CodeBracketIcon, 
+  EyeIcon, 
+  ArrowDownTrayIcon, 
+  XMarkIcon, 
+  ArrowLeftIcon 
+} from '@heroicons/react/24/outline';
 
+// Menggunakan string literals untuk tipe tab yang lebih jelas
+type EditorTabType = 'visual' | 'html' | 'preview';
+
+// Menggunakan div dan implementasi custom untuk menghindari komponen Tab yang deprecated
 interface TemplateEditorProps {
   readonly initialData?: {
     id?: string;
@@ -29,82 +41,62 @@ export function TemplateEditor({ initialData, onSaveAction }: TemplateEditorProp
   const [name, setName] = useState(initialData?.name ?? "");
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [content, setContent] = useState(initialData?.content ?? "<p>Write your email content here...</p>");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [htmlContent, setHtmlContent] = useState(initialData?.htmlContent ?? "");
   const [rawHtml, setRawHtml] = useState(initialData?.htmlContent ?? "");
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState<EditorTabType>('visual');
   const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [previewData, setPreviewData] = useState<Record<string, string>>({
     name: "John Doe",
     email: "john@example.com",
     company: "ACME Inc.",
     date: new Date().toLocaleDateString(),
   });
-  
-  // Use a ref to track if we're currently syncing content to avoid circular updates
-  const isSyncingRef = useRef(false);
-  
-  // Track which editor was most recently used
-  const lastUpdatedSourceRef = useRef<'visual' | 'html'>('visual');
 
-  // Update HTML content when switching tabs
+  // Update HTML content when switching to HTML tab
   useEffect(() => {
-    if (isSyncingRef.current) return;
-    
-    isSyncingRef.current = true;
-    
-    try {
-      if (activeTab === 1) { // Switching to HTML tab
-        // If last updated from visual editor, update raw HTML
-        if (lastUpdatedSourceRef.current === 'visual') {
-          setRawHtml(content);
-        }
-      } else if (activeTab === 0) { // Switching to Visual tab
-        // If last updated from HTML editor, update visual content
-        if (lastUpdatedSourceRef.current === 'html') {
-          setContent(rawHtml);
-          setHtmlContent(rawHtml);
-        }
-      }
-    } finally {
-      // Use a longer timeout to ensure all state updates have completed
-      setTimeout(() => {
-        isSyncingRef.current = false;
-      }, 200);
+    if (activeTab === 'html') {
+      setRawHtml(htmlContent);
     }
-  }, [activeTab, content, rawHtml]);
+  }, [activeTab, htmlContent]);
 
-  // Handle visual editor change
-  const handleEditorChange = useCallback((html: string) => {
-    // Normalize HTML by removing unnecessary line breaks
-    const normalizedHtml = html.replace(/\r\n/g, '').replace(/\r/g, '').replace(/\n/g, '');
-    
-    // Only update state if the content actually changed
-    if (content !== normalizedHtml) {
-      setContent(normalizedHtml);
-      setHtmlContent(normalizedHtml);
-      
-      // Only update rawHtml if we're in the visual editor tab
-      if (activeTab === 0) {
-        setRawHtml(normalizedHtml);
-      }
+  // Update editor content when switching from HTML tab
+  useEffect(() => {
+    if (activeTab === 'visual' && rawHtml !== htmlContent) {
+      // Only update when switching to visual editor
+      setHtmlContent(rawHtml);
+      setContent(rawHtml);
     }
-  }, [activeTab, content]);
-  
-  // Perbarui juga fungsi handleHtmlChange
-  const handleHtmlChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newHtml = e.target.value;
-    setRawHtml(newHtml);
-    lastUpdatedSourceRef.current = 'html';
-    
-    // Update content and htmlContent when in HTML tab
-    if (activeTab === 1) {
-      setContent(newHtml);
-      setHtmlContent(newHtml);
+  }, [activeTab, rawHtml, htmlContent]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    if (initialData) {
+      const hasChanges = 
+        name !== initialData.name ||
+        description !== initialData.description ||
+        (activeTab === 'html' ? rawHtml !== initialData.htmlContent : htmlContent !== initialData.htmlContent);
+      
+      setHasUnsavedChanges(hasChanges);
+    }
+  }, [name, description, htmlContent, rawHtml, activeTab, initialData]);
+
+  // Handle editor change, preserving HTML exactly as it comes from the editor
+  const handleEditorChange = useCallback((html: string) => {
+    if (activeTab === 'visual') {
+      setContent(html);
+      setHtmlContent(html);
     }
   }, [activeTab]);
 
-  // Handle saving the template
+  // Handle HTML source code changes
+  const handleHtmlChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newHtml = e.target.value;
+    setRawHtml(newHtml);
+    // We don't update other state variables here to avoid conflicts between tabs
+  }, []);
+
+  // Handle form submission
   const handleSave = async () => {
     if (!name) {
       alert("Please enter a template name");
@@ -113,8 +105,8 @@ export function TemplateEditor({ initialData, onSaveAction }: TemplateEditorProp
 
     setIsSaving(true);
     try {
-      // Use the most recently updated content
-      const finalHtml = lastUpdatedSourceRef.current === 'html' ? rawHtml : content;
+      // Use the appropriate HTML based on which tab is active
+      const finalHtml = activeTab === 'html' ? rawHtml : htmlContent;
       
       await onSaveAction({
         name,
@@ -126,80 +118,124 @@ export function TemplateEditor({ initialData, onSaveAction }: TemplateEditorProp
       router.push("/templates");
     } catch (error) {
       console.error("Error saving template:", error);
-      alert("Failed to save template. Please try again.");
+      // We don't need to show an alert here as the error will be handled by the wrapper component
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Format HTML for better readability
-  const formatHtml = useCallback(() => {
-    if (!rawHtml) return;
-    
-    try {
-      // Create a temporary DOM element
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(rawHtml, 'text/html');
-      
-      // Serialize with proper formatting - gunakan string HTML, bukan Document
-      const serialized = new XMLSerializer().serializeToString(doc);
-      const formatted = formatHtmlWithIndentation(serialized);
-      
-      // Update the raw HTML
-      setRawHtml(formatted);
-      lastUpdatedSourceRef.current = 'html';
-      
-      // If in HTML tab, also update content and htmlContent
-      if (activeTab === 1) {
-        setContent(formatted);
-        setHtmlContent(formatted);
-      }
-    } catch (error) {
-      console.error("Error formatting HTML:", error);
-    }
-  }, [rawHtml, activeTab]);
+  // Function to get the HTML content for preview
+  const getPreviewHtml = () => {
+    // If we're in the HTML tab, use the raw HTML, otherwise use the content from the visual editor
+    return activeTab === 'html' ? rawHtml : htmlContent;
+  };
 
-  // Function to format HTML with indentation
-  function formatHtmlWithIndentation(html: string): string {
-    if (!html) return '';
-    
-    // Clean up HTML first - remove excessive whitespace between tags
-    const cleanHtml = html.replace(/>\s+</g, '><').trim();
-    
-    // Simple indentation-based formatter
-    let formatted = '';
-    
-    // Split by < to get tag starts
-    const parts = cleanHtml.split('<');
-    
-    // Using for-of loop for simple iteration
-    for (const part of parts) {
-      if (!part) continue;
-      
-      const tagParts = part.split('>');
-      if (tagParts.length < 2) continue;
-      
-      const tag = tagParts[0];
-      const content = tagParts[1];
-      
-      // Add the tag
-      formatted += '<' + tag + '>';
-      
-      // Add content if not empty and not just whitespace
-      if (content.trim()) {
-        formatted += content;
-      }
+  // Custom tab rendering to avoid deprecated components
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'visual':
+        return (
+          <div className="border border-gray-300 rounded-md overflow-hidden">
+            <EmailEditor
+              initialHtml={content}
+              onChangeAction={handleEditorChange} 
+              availableVariables={["name", "email", "company", "date"]}
+            />
+            <div className="mt-2 text-sm text-gray-500 p-2">
+              Available variables: &#123;&#123;name&#125;&#125;, &#123;&#123;email&#125;&#125;, &#123;&#123;company&#125;&#125;, &#123;&#123;date&#125;&#125;
+            </div>
+          </div>
+        );
+      case 'html':
+        return (
+          <div className="border border-gray-300 rounded-md overflow-hidden">
+            <textarea
+              value={rawHtml}
+              onChange={handleHtmlChange}
+              className="w-full h-96 p-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+              placeholder="<p>Your HTML code here...</p>"
+              spellCheck="false"
+            />
+            <div className="mt-2 text-sm text-gray-500 p-2 bg-gray-50 border-t border-gray-300">
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <span>
+                  Edit the raw HTML directly. Use <code className="px-1 py-0.5 bg-gray-100 rounded text-blue-600">&#123;&#123;variable&#125;&#125;</code> syntax for dynamic content.
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      case 'preview':
+        return (
+          <div className="border border-gray-300 rounded-md overflow-hidden bg-white">
+            <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+              <h3 className="text-sm font-medium">Preview with sample data</h3>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline-primary" 
+                  size="sm"
+                  onClick={() => setPreviewData({
+                    name: "Jane Smith",
+                    email: "jane@example.com",
+                    company: "Globex Corp",
+                    date: new Date().toLocaleDateString(),
+                  })}
+                >
+                  Alternative Data
+                </Button>
+                <Button 
+                  variant="outline-primary" 
+                  size="sm"
+                  onClick={() => setPreviewData({
+                    name: "John Doe",
+                    email: "john@example.com",
+                    company: "ACME Inc.",
+                    date: new Date().toLocaleDateString(),
+                  })}
+                >
+                  Reset Data
+                </Button>
+              </div>
+            </div>
+            <EmailPreview
+              html={getPreviewHtml()}
+              parameters={previewData}
+            />
+          </div>
+        );
+      default:
+        return null;
     }
-    
-    return formatted;
-  }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm">
+      <div className="border-b pb-4 mb-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            {initialData?.id ? "Edit Template" : "Create New Template"}
+          </h1>
+          {hasUnsavedChanges && (
+            <span className="text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded-md flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Unsaved changes
+            </span>
+          )}
+        </div>
+        <p className="text-gray-500 mt-1">
+          Design your email template and use variables to personalize content.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Template Name
+            Template Name*
           </label>
           <Input
             id="name"
@@ -208,7 +244,9 @@ export function TemplateEditor({ initialData, onSaveAction }: TemplateEditorProp
             onChange={(e) => setName(e.target.value)}
             placeholder="Welcome Email"
             required
+            className="mt-1"
           />
+          <p className="mt-1 text-xs text-gray-500">Give your template a descriptive name</p>
         </div>
         
         <div>
@@ -221,135 +259,67 @@ export function TemplateEditor({ initialData, onSaveAction }: TemplateEditorProp
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Template for welcoming new subscribers"
+            className="mt-1"
           />
+          <p className="mt-1 text-xs text-gray-500">Optional description to help identify the template&apos;s purpose</p>
         </div>
       </div>
       
-      <Tab.Group selectedIndex={activeTab} onChange={setActiveTab}>
-        <Tab.List className="flex space-x-1 rounded-xl bg-blue-50 p-1">
-          <Tab
-            className={({ selected }) =>
-              `w-full rounded-lg py-2.5 text-sm font-medium leading-5 
-              ${selected 
-                ? 'bg-white shadow text-blue-700' 
-                : 'text-blue-500 hover:bg-white/[0.12] hover:text-blue-700'}`
-            }
-          >
-            Visual Editor
-          </Tab>
-          <Tab
-            className={({ selected }) =>
-              `w-full rounded-lg py-2.5 text-sm font-medium leading-5 
-              ${selected 
-                ? 'bg-white shadow text-blue-700' 
-                : 'text-blue-500 hover:bg-white/[0.12] hover:text-blue-700'}`
-            }
-          >
-            HTML Code
-          </Tab>
-          <Tab
-            className={({ selected }) =>
-              `w-full rounded-lg py-2.5 text-sm font-medium leading-5 
-              ${selected 
-                ? 'bg-white shadow text-blue-700' 
-                : 'text-blue-500 hover:bg-white/[0.12] hover:text-blue-700'}`
-            }
-          >
-            Preview
-          </Tab>
-        </Tab.List>
-        <Tab.Panels className="mt-2">
-          <Tab.Panel>
-            <div className="border border-gray-300 rounded-md overflow-hidden">
-              <EmailEditor
-                initialHtml={content}
-                onChangeAction={handleEditorChange} 
-                availableVariables={["name", "email", "company", "date"]}
-              />
-            </div>
-            <div className="mt-2 text-sm text-gray-500">
-              Available variables: &#123;&#123;name&#125;&#125;, &#123;&#123;email&#125;&#125;, &#123;&#123;company&#125;&#125;, &#123;&#123;date&#125;&#125;
-            </div>
-          </Tab.Panel>
-          
-          <Tab.Panel>
-            <div className="border border-gray-300 rounded-md overflow-hidden">
-              <div className="p-2 bg-gray-50 border-b border-gray-300 flex justify-between items-center">
-                <span className="text-xs text-gray-500">Edit HTML directly</span>
-                <button 
-                  type="button"
-                  className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100"
-                  onClick={formatHtml}
-                >
-                  Format HTML
-                </button>
-              </div>
-              <textarea
-                value={rawHtml}
-                onChange={handleHtmlChange}
-                className="w-full h-96 p-4 font-mono text-sm"
-                placeholder="<p>Your HTML code here...</p>"
-                spellCheck="false"
-              />
-            </div>
-            <div className="mt-2 text-sm text-gray-500">
-              Edit the raw HTML directly. Use &#123;&#123;variable&#125;&#125; syntax for dynamic content.
-            </div>
-          </Tab.Panel>
-          
-          <Tab.Panel>
-            <div className="border border-gray-300 rounded-md overflow-hidden bg-white">
-              <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-                <h3 className="text-sm font-medium">Preview with sample data</h3>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setPreviewData({
-                      name: "Jane Smith",
-                      email: "jane@example.com",
-                      company: "Globex Corp",
-                      date: new Date().toLocaleDateString(),
-                    })}
-                  >
-                    Alternative Data
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setPreviewData({
-                      name: "John Doe",
-                      email: "john@example.com",
-                      company: "ACME Inc.",
-                      date: new Date().toLocaleDateString(),
-                    })}
-                  >
-                    Reset Data
-                  </Button>
-                </div>
-              </div>
-              <EmailPreview
-                html={activeTab === 1 ? rawHtml : content}
-                parameters={previewData}
-              />
-            </div>
-          </Tab.Panel>
-        </Tab.Panels>
-      </Tab.Group>
+      {/* Custom Tab Navigation */}
+      <div className="mt-8">
+        <div className="flex space-x-1 rounded-xl bg-blue-50 p-1">
+          {[
+            { name: 'Visual Editor', tab: 'visual' as const, icon: <PencilIcon className="h-4 w-4 mr-1.5" /> },
+            { name: 'HTML Code', tab: 'html' as const, icon: <CodeBracketIcon className="h-4 w-4 mr-1.5" /> },
+            { name: 'Preview', tab: 'preview' as const, icon: <EyeIcon className="h-4 w-4 mr-1.5" /> }
+          ].map(({ name, tab, icon }) => (
+            <button
+              key={name}
+              onClick={() => setActiveTab(tab)}
+              className={`w-full rounded-lg py-2.5 text-sm font-medium leading-5 flex items-center justify-center transition-colors duration-150 ${
+                activeTab === tab 
+                  ? 'bg-white shadow text-blue-700' 
+                  : 'text-blue-500 hover:bg-white/[0.12] hover:text-blue-700'
+              }`}
+            >
+              {icon}
+              {name}
+            </button>
+          ))}
+        </div>
+        
+        <div className="mt-4">
+          {renderTabContent()}
+        </div>
+      </div>
       
-      <div className="flex justify-end space-x-4">
+      <div className="flex justify-between space-x-4 pt-6 mt-8 border-t border-gray-200">
         <Button 
-          variant="outline" 
+          variant="outline-secondary" 
           onClick={() => router.push("/templates")}
+          icon={<ArrowLeftIcon className="h-4 w-4 mr-1.5" />}
         >
-          Cancel
+          Back to Templates
         </Button>
-        <Button 
-          onClick={handleSave}
-          loading={isSaving}
-        >
-          Save Template
-        </Button>
+        
+        <div className="flex space-x-3">
+          <Button 
+            variant="outline-primary" 
+            onClick={() => router.push("/templates")}
+            icon={<XMarkIcon className="h-4 w-4 mr-1.5" />}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={handleSave}
+            loading={isSaving}
+            disabled={!hasUnsavedChanges}
+            icon={<ArrowDownTrayIcon className="h-4 w-4 mr-1.5" />}
+          >
+            {initialData?.id ? "Update Template" : "Save Template"}
+          </Button>
+        </div>
       </div>
     </div>
   );

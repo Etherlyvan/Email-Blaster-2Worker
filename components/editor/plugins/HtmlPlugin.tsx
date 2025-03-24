@@ -30,16 +30,14 @@ interface HtmlImportPluginProps {
   readonly initialHtml: string;
 }
 
-// Improved HTML parser that better preserves formatting
+// Update the parseHtmlToNodes function to better handle HTML
 function parseHtmlToNodes(html: string, editor: LexicalEditor): void {
   if (!html || typeof html !== 'string') return;
 
   try {
-    // Clean up HTML but preserve intentional line breaks
-    const cleanHtml = html.replace(/>\s+</g, '><').trim();
-    
+    // Clean up HTML but preserve formatting
     const parser = new DOMParser();
-    const doc = parser.parseFromString(cleanHtml, 'text/html');
+    const doc = parser.parseFromString(html, 'text/html');
     
     editor.update(() => {
       const root = $getRoot();
@@ -56,21 +54,8 @@ function parseHtmlToNodes(html: string, editor: LexicalEditor): void {
         console.warn("DOM parsing failed, using fallback method:", parseError);
       }
       
-      // Fallback to basic structure if DOM parsing fails
-      const bodyContent = doc.body.innerHTML;
-      if (bodyContent) {
-        // Create a basic paragraph with the content
-        const paragraph = $createParagraphNode();
-        // Strip tags for text-only content as a last resort
-        const textContent = bodyContent.replace(/<[^>]*>/g, ' ').trim();
-        paragraph.append($createTextNode(textContent || ""));
-        root.append(paragraph);
-      } else {
-        // Create an empty paragraph if there's no content
-        const paragraph = $createParagraphNode();
-        paragraph.append($createTextNode(""));
-        root.append(paragraph);
-      }
+      // If DOM parsing fails, use a more direct approach
+      root.append($createParagraphNode().append($createTextNode(doc.body.innerHTML || "")));
     });
   } catch (error) {
     console.error("Error in parseHtmlToNodes:", error);
@@ -79,9 +64,7 @@ function parseHtmlToNodes(html: string, editor: LexicalEditor): void {
     editor.update(() => {
       const root = $getRoot();
       root.clear();
-      const paragraph = $createParagraphNode();
-      paragraph.append($createTextNode(""));
-      root.append(paragraph);
+      root.append($createParagraphNode().append($createTextNode(html || "")));
     });
   }
 }
@@ -300,7 +283,7 @@ export function getEditorHtml(editor: LexicalEditor): string {
   return html;
 }
 
-// Enhanced importHtml function with better error handling and fallbacks
+// Enhanced importHtml function with better error handling
 export function importHtml(editor: LexicalEditor, html: string): void {
   if (!editor || !html) return;
   
@@ -315,34 +298,29 @@ export function importHtml(editor: LexicalEditor, html: string): void {
       root.append(paragraph);
     });
     
-    // Clean up the HTML to normalize line breaks
-    const normalizedHtml = html.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '');
-    
     // Then use a timeout to allow the editor to stabilize
     setTimeout(() => {
-      try {
-        // Try the main HTML parser
-        parseHtmlToNodes(normalizedHtml, editor);
-      } catch (error) {
-        console.error("Error importing HTML with main parser:", error);
-        
-        // Try the fallback parser
+      editor.update(() => {
         try {
-          manualParseHtml(editor, normalizedHtml);
-        } catch (fallbackError) {
-          console.error("Fallback HTML parsing also failed:", fallbackError);
           
-          // Ultimate fallback - create a simple paragraph
-          editor.update(() => {
-            const root = $getRoot();
-            root.clear();
-            
-            const paragraph = $createParagraphNode();
-            paragraph.append($createTextNode("Error loading content"));
-            root.append(paragraph);
-          });
+          const root = $getRoot();
+          root.clear();
+          
+          // Try to preserve the HTML structure exactly as it was input
+          const paragraph = $createParagraphNode();
+          paragraph.append($createTextNode(html));
+          root.append(paragraph);
+        } catch (error) {
+          console.error("Error importing HTML:", error);
+          
+          // Ultimate fallback
+          const root = $getRoot();
+          root.clear();
+          const paragraph = $createParagraphNode();
+          paragraph.append($createTextNode(html || ""));
+          root.append(paragraph);
         }
-      }
+      });
     }, 50);
   } catch (error) {
     console.error("Error in importHtml:", error);

@@ -39,7 +39,7 @@ async function CampaignsContent() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Campaigns</h1>
         <Link href="/campaigns/create">
-          <Button>Create Campaign</Button>
+          <Button variant="primary">Create Campaign</Button>
         </Link>
       </div>
       
