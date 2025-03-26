@@ -5,10 +5,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Button } from "../ui/Button";
-import { Campaign } from "../../types/campaign";
+import { PaperAirplaneIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 interface CampaignDetailActionsProps {
-  readonly campaign: Campaign;
+  readonly campaign: {
+    id: string;
+    status: string;
+    brevoKeyId: string | null;
+  };
 }
 
 export function CampaignDetailActions({ campaign }: CampaignDetailActionsProps) {
@@ -55,28 +59,47 @@ export function CampaignDetailActions({ campaign }: CampaignDetailActionsProps) 
     }
   };
   
-  return (
-    <>
-      {campaign.status === 'DRAFT' && (
+  if (campaign.status === 'DRAFT') {
+    return (
+      <>
         <Button 
           onClick={handleSendNow} 
           loading={isSending}
           disabled={!campaign.brevoKeyId}
           title={!campaign.brevoKeyId ? "Missing Brevo key" : "Send campaign now"}
+          variant="primary"
+          size="sm"
+          icon={<PaperAirplaneIcon className="h-4 w-4 mr-1.5" />}
         >
           Send Now
         </Button>
-      )}
-      
-      {(campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED') && (
+        
         <Button 
           variant="danger" 
+          size="sm"
           onClick={handleDelete} 
           loading={isDeleting}
+          icon={<TrashIcon className="h-4 w-4 mr-1.5" />}
         >
           Delete
         </Button>
-      )}
-    </>
-  );
+      </>
+    );
+  }
+  
+  if (campaign.status === 'SCHEDULED') {
+    return (
+      <Button 
+        variant="danger" 
+        size="sm"
+        onClick={handleDelete} 
+        loading={isDeleting}
+        icon={<TrashIcon className="h-4 w-4 mr-1.5" />}
+      >
+        Delete
+      </Button>
+    );
+  }
+  
+  return null;
 }

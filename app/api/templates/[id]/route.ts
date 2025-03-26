@@ -27,7 +27,6 @@ export async function GET(
   }
   
   try {
-    // Fixed: Use lowercase "emailTemplate" instead of "EmailTemplate"
     const template = await prisma.emailTemplate.findUnique({
       where: {
         id,
@@ -68,13 +67,18 @@ export async function PUT(
     const json = await request.json();
     const validatedData = templateSchema.parse(json);
     
-    // Fixed: Use lowercase "emailTemplate" instead of "EmailTemplate"
+    // Make sure both content and htmlContent are the same
     const template = await prisma.emailTemplate.update({
       where: {
         id,
         userId: session.user.id,
       },
-      data: validatedData,
+      data: {
+        name: validatedData.name,
+        description: validatedData.description ?? '',
+        content: validatedData.htmlContent, // Use htmlContent for both fields
+        htmlContent: validatedData.htmlContent,
+      },
     });
     
     return NextResponse.json(template);
@@ -107,7 +111,6 @@ export async function DELETE(
   }
   
   try {
-    // Fixed: Use lowercase "emailTemplate" instead of "EmailTemplate"
     await prisma.emailTemplate.delete({
       where: {
         id,

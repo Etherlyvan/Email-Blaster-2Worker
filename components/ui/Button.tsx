@@ -1,7 +1,7 @@
 // components/ui/Button.tsx
 "use client";
 
-import { ButtonHTMLAttributes, forwardRef } from "react";
+import { ButtonHTMLAttributes, forwardRef, ElementType } from "react";
 
 type ButtonVariant =
   | 'default'
@@ -29,23 +29,25 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   fullWidth?: boolean;
   icon?: React.ReactNode;
+  as?: ElementType;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ 
     className = "", 
-    variant = "default", // Changed default to "default"
+    variant = "default",
     size = "md", 
     loading = false, 
     fullWidth = false,
     icon,
+    as: Component = "button",
     children, 
     ...props 
   }, ref) => {
     const baseStyles = "inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ";
     
     const variants: Record<ButtonVariant, string> = {
-      default: "bg-gray-900  hover:bg-gray-800 focus:ring-gray-900 border border-gray-900", // Default style
+      default: "bg-gray-900 text-white hover:bg-gray-800 focus:ring-gray-900 border border-gray-900",
       primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-600 border border-blue-600",
       secondary: "bg-purple-600 text-white hover:bg-purple-700 focus:ring-purple-600 border border-purple-600",
       success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-600 border border-green-600",
@@ -76,7 +78,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const widthClass = fullWidth ? "w-full" : "";
     
     return (
-      <button
+      <Component
         ref={ref}
         className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${widthClass} ${className}`}
         disabled={loading || props.disabled}
@@ -106,7 +108,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {icon && <span className="mr-2">{icon}</span>}
         {children}
-      </button>
+      </Component>
     );
   }
 );

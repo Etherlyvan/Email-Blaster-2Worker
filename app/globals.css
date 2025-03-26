@@ -101,3 +101,118 @@ body {
 .template-variable-item:hover {
   background-color: #f3f4f6;
 }
+
+
+/* Drag and drop styles */
+.drag-over {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 2px dashed #3b82f6;
+}
+
+.dragging {
+  opacity: 0.6;
+  cursor: move;
+}
+
+.component-placeholder {
+  border: 2px dashed #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 16px;
+  border-radius: 4px;
+  text-align: center;
+  color: #3b82f6;
+  margin: 8px 0;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.component-ghost {
+  opacity: 0.5;
+  background: #f0f4ff;
+  border: 1px solid #3b82f6;
+}
+
+/* Visual editor styles */
+.email-section {
+  position: relative;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.email-section:hover {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.section-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.email-section:hover .section-controls {
+  display: flex;
+}
+
+.section-handle {
+  cursor: move;
+  padding: 4px;
+  background: #f3f4f6;
+  border-radius: 4px 0 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-buttons {
+  display: flex;
+}
+
+.section-button {
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.section-button:hover {
+  color: #1d4ed8;
+  background: #f3f4f6;
+}
+
+.section-button.delete:hover {
+  color: #dc2626;
+}
+
+/* Image dropzone */
+.image-dropzone {
+  border: 2px dashed #d1d5db;
+  border-radius: 4px;
+  padding: 24px;
+  text-align: center;
+  background-color: #f9fafb;
+  transition: all 0.2s ease;
+}
+
+.image-dropzone.active {
+  border-color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.image-dropzone-text {
+  color: #6b7280;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+/* Add to globals.css */
+select, option {
+  font-family: inherit;
+}

@@ -23,7 +23,6 @@ export function CampaignFormWithParams({
   const searchParams = useSearchParams();
   const templateId = searchParams?.get('templateId');
 
-  // Make sure CampaignForm accepts urlTemplateId
   return (
     <CampaignForm
       brevoKeys={brevoKeys}

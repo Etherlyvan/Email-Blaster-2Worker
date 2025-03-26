@@ -8,6 +8,7 @@ import { z } from "zod";
 import axios from "axios";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { XMarkIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 
 const testEmailSchema = z.object({
   to: z.string().email("Valid email is required"),
@@ -66,15 +67,16 @@ export function TestEmailModal({ brevoKeyId, onCloseAction }: TestEmailModalProp
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Send Test Email</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Send Test Email</h2>
           <button
             type="button"
             onClick={onCloseAction}
-            className="text-gray-400 hover:text-gray-500"
+            className="text-gray-400 hover:text-gray-500 rounded-full p-1 hover:bg-gray-100"
           >
-            &times;
+            <XMarkIcon className="h-5 w-5" />
+            <span className="sr-only">Close</span>
           </button>
         </div>
         
@@ -124,24 +126,37 @@ export function TestEmailModal({ brevoKeyId, onCloseAction }: TestEmailModalProp
           {result && (
             <div className={`p-3 rounded-md ${
               result.success
-                ? 'bg-green-50 text-green-800'
-                : 'bg-red-50 text-red-800'
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
             }`}>
-              {result.message}
+              <div className="flex">
+                {result.success ? (
+                  <svg className="h-5 w-5 text-green-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5 text-red-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+                <span>{result.message}</span>
+              </div>
             </div>
           )}
           
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-end space-x-3 pt-3">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary" // Diubah dari "outline" ke "secondary"
               onClick={onCloseAction}
             >
               Cancel
             </Button>
             <Button
               type="submit"
+              variant="primary" // Menambahkan variant explicit
               loading={isSending}
+              icon={<PaperAirplaneIcon className="h-4 w-4 mr-1" />}
             >
               Send Test Email
             </Button>

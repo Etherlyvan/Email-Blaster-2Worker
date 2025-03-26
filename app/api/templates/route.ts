@@ -49,9 +49,13 @@ export async function POST(request: NextRequest) {
     const json = await request.json();
     const validatedData = templateSchema.parse(json);
     
+    // Create the template
     const template = await prisma.emailTemplate.create({
       data: {
-        ...validatedData,
+        name: validatedData.name,
+        description: validatedData.description ?? '',
+        content: validatedData.htmlContent, // Use htmlContent for both fields
+        htmlContent: validatedData.htmlContent,
         userId: session.user.id,
       },
     });

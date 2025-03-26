@@ -136,7 +136,7 @@ export function CampaignTemplateVariables({ groupId }: CampaignTemplateVariables
   return (
     <div className="relative">
       <Button 
-        variant="outline" 
+        variant="primary"
         size="sm"
         onClick={toggleOpen}
         disabled={isLoading}

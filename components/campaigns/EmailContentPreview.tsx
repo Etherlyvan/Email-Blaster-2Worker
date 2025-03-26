@@ -1,4 +1,4 @@
-// components/campaigns/EmailContentPreview.tsx 
+// components/campaigns/EmailContentPreview.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -11,10 +11,14 @@ interface EmailContentPreviewProps {
 export function EmailContentPreview({ htmlContent, parameters = {} }: EmailContentPreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState<number>(500); // Default height
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
+    
+    // Show loading state
+    setIsLoading(true);
     
     // Wait for iframe to load
     const handleLoad = () => {
@@ -27,30 +31,58 @@ export function EmailContentPreview({ htmlContent, parameters = {} }: EmailConte
         doc.head.innerHTML = `
           <style>
             body {
-              font-family: Arial, sans-serif;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
               line-height: 1.6;
               color: #333;
               margin: 0;
-              padding: 0;
+              padding: 16px;
             }
             img { max-width: 100%; height: auto; }
-            a { color: #0070f3; }
+            a { color: #3b82f6; text-decoration: none; }
+            a:hover { text-decoration: underline; }
             .template-variable {
               background-color: #ffe066;
               padding: 0 2px;
               border-radius: 2px;
+              font-family: monospace;
+            }
+            table { border-collapse: collapse; width: 100%; }
+            td, th { padding: 8px; }
+            
+            /* Email container for better preview */
+            .email-container {
+              max-width: 600px;
+              margin: 0 auto;
+            }
+            
+            /* Additional styles for better email rendering */
+            h1, h2, h3, h4, h5, h6 {
+              margin-top: 0;
+              margin-bottom: 16px;
+            }
+            p {
+              margin-top: 0;
+              margin-bottom: 16px;
+            }
+            .button {
+              display: inline-block;
+              padding: 8px 16px;
+              background-color: #3b82f6;
+              color: white !important;
+              border-radius: 4px;
+              text-decoration: none;
             }
           </style>
         `;
         
         // Process the HTML content with template variables
-        let processedContent = htmlContent;
+        let processedContent = htmlContent || "<p>No content to display</p>"; // Default content
         
         // Replace known parameters
-        if (parameters) {
+        if (parameters && Object.keys(parameters).length > 0) {
           Object.entries(parameters).forEach(([key, value]) => {
             const regex = new RegExp(`{{${key}}}`, 'g');
-            processedContent = processedContent.replace(regex, value);
+            processedContent = processedContent.replace(regex, value || '');
           });
         }
         
@@ -60,13 +92,19 @@ export function EmailContentPreview({ htmlContent, parameters = {} }: EmailConte
           '<span class="template-variable">{{$1}}</span>'
         );
         
+        // Wrap content in email container
+        processedContent = `<div class="email-container">${processedContent}</div>`;
+        
         // Set HTML content
         doc.body.innerHTML = processedContent;
         
         // Adjust iframe height to content
-        setHeight(doc.body.scrollHeight + 40); // Add some padding
+        const newHeight = Math.max(doc.body.scrollHeight + 40, 200); // Minimum 200px height
+        setHeight(newHeight);
+        setIsLoading(false);
       } catch (error) {
         console.error("Error setting iframe content:", error);
+        setIsLoading(false);
       }
     };
     
@@ -83,13 +121,24 @@ export function EmailContentPreview({ htmlContent, parameters = {} }: EmailConte
   }, [htmlContent, parameters]);
   
   return (
-    <iframe
-      ref={iframeRef}
-      title="Email Preview"
-      width="100%"
-      height={height}
-      style={{ border: "none", overflow: "hidden" }}
-      sandbox="allow-same-origin"
-    />
+    <div className="relative">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-75 z-10">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+      <iframe
+        ref={iframeRef}
+        title="Email Preview"
+        width="100%"
+        height={height}
+        style={{ 
+          border: "none", 
+          overflow: "hidden",
+          transition: "height 0.3s ease"
+        }}
+        sandbox="allow-same-origin"
+      />
+    </div>
   );
 }

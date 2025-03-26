@@ -26,7 +26,7 @@ interface Template {
 
 interface TemplateGalleryProps {
   readonly templates: Template[];
-  readonly onSelect?: (templateId: string) => void;
+  readonly onSelect?: (templateId: string, htmlContent: string) => void;
 }
 
 export function TemplateGallery({ templates, onSelect }: TemplateGalleryProps) {
@@ -175,7 +175,7 @@ export function TemplateGallery({ templates, onSelect }: TemplateGalleryProps) {
                     <Button 
                       variant="primary"
                       size="sm" 
-                      onClick={() => onSelect(template.id)}
+                      onClick={() => onSelect(template.id, template.htmlContent)}
                       icon={<DocumentDuplicateIcon className="h-4 w-4 mr-1" />}
                     >
                       Use Template

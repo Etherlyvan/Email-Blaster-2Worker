@@ -17,13 +17,13 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} bg-gray-50 min-h-screen`}>
-        <AuthProvider>
+    <html lang="en" className={inter.className}>
+      <AuthProvider>
+        <body className="bg-gray-50">
           <Header />
           <main>{children}</main>
-        </AuthProvider>
-      </body>
+        </body>
+      </AuthProvider>
     </html>
   );
 }

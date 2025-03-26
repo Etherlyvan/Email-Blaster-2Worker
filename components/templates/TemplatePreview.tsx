@@ -174,7 +174,7 @@ export function TemplatePreview({ html, sampleData = {} }: TemplatePreviewProps)
                     margin: 0 auto;
                   }
                 </style>
-              </head>
+              </head>// components/templates/TemplatePreview.tsx (continued)
               <body>
                 <div class="email-container">${processedHtml}</div>
               </body>
@@ -209,3 +209,4 @@ export function TemplatePreview({ html, sampleData = {} }: TemplatePreviewProps)
     </div>
   );
 }
+              

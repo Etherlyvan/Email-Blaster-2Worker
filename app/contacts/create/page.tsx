@@ -159,7 +159,7 @@ role=Manager"
             
             <div className="flex justify-end space-x-4">
               <Link href="/contacts">
-                <Button variant="outline" type="button">Cancel</Button>
+                <Button variant="danger" type="button">Cancel</Button>
               </Link>
               <Button type="submit" loading={isSubmitting}>Create Contact</Button>
             </div>

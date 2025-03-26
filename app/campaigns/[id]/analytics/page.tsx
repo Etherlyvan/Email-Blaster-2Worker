@@ -6,37 +6,55 @@ import { redirect, notFound } from "next/navigation";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/db";
 import { Button } from "../../../../components/ui/Button";
-import { Card } from "../../../../components/ui/Card";
+import { CampaignAnalytics } from "../../../../components/campaigns/CampaignAnalytics";
+import { CampaignDetailStats } from "../../../../components/campaigns/CampaignDetailStats";
+import { 
+  ArrowLeftIcon, 
+  ChartBarIcon
+} from "@heroicons/react/24/outline";
 
-// Updated type for Next.js 15
+// Skeleton loader for analytics page
+function AnalyticsPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div className="h-8 w-64 bg-gray-200 rounded-md animate-pulse"></div>
+        <div className="h-10 w-24 bg-gray-200 rounded-md animate-pulse"></div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Fix SonarLint S6479 by using unique keys instead of array indices */}
+        <div key="skeleton-stat-1" className="h-32 bg-gray-100 rounded-lg animate-pulse"></div>
+        <div key="skeleton-stat-2" className="h-32 bg-gray-100 rounded-lg animate-pulse"></div>
+        <div key="skeleton-stat-3" className="h-32 bg-gray-100 rounded-lg animate-pulse"></div>
+        <div key="skeleton-stat-4" className="h-32 bg-gray-100 rounded-lg animate-pulse"></div>
+      </div>
+      
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="h-6 w-40 bg-gray-200 rounded-md animate-pulse mb-6"></div>
+        <div className="h-64 bg-gray-200 rounded-md animate-pulse"></div>
+      </div>
+    </div>
+  );
+}
+
+// Type definition for params
 interface PageProps {
-  readonly params: Promise<{ id: string }>;
+  readonly params: { id: string }; // Made readonly to fix S6759
 }
 
-// Create a proper interface with readonly props
-interface CampaignAnalyticsContentProps {
-  readonly params: Promise<{ id: string }>;
+// Helper function to format date
+function formatDate(date: Date | string | null): string {
+  if (!date) return "N/A";
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(d);
 }
 
-// Helper function to determine status color
-const getStatusBadgeClass = (status: string): string => {
-  if (status === 'SENT' || status === 'DELIVERED') {
-    return 'bg-green-100 text-green-800';
-  } else if (status === 'OPENED') {
-    return 'bg-blue-100 text-blue-800';
-  } else if (status === 'CLICKED') {
-    return 'bg-indigo-100 text-indigo-800';
-  } else if (status === 'BOUNCED' || status === 'FAILED') {
-    return 'bg-red-100 text-red-800';
-  } else {
-    return 'bg-gray-100 text-gray-800';
-  }
-};
-
-async function CampaignAnalyticsContent({ params }: CampaignAnalyticsContentProps) {
-  // Await the params promise to get the actual values
-  const { id } = await params;
-  
+// Main analytics component
+async function CampaignAnalyticsContent({ id }: { readonly id: string }) { // Made readonly to fix S6759
   const session = await getServerSession(authOptions);
   
   if (!session?.user) {
@@ -50,6 +68,9 @@ async function CampaignAnalyticsContent({ params }: CampaignAnalyticsContentProp
     },
     include: {
       group: true,
+      _count: {
+        select: { EmailDelivery: true }
+      }
     },
   });
   
@@ -57,7 +78,23 @@ async function CampaignAnalyticsContent({ params }: CampaignAnalyticsContentProp
     notFound();
   }
   
-  // Get email delivery stats
+  if (campaign.status !== 'SENT') {
+    redirect(`/campaigns/${id}`);
+  }
+  
+  // Get delivery stats
+  const deliveryStats = await prisma.emailDelivery.groupBy({
+    by: ['status'],
+    where: { campaignId: id },
+    _count: true
+  });
+  
+  const stats = deliveryStats.reduce((acc, stat) => {
+    acc[stat.status] = stat._count;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  // Get email deliveries
   const deliveries = await prisma.emailDelivery.findMany({
     where: {
       campaignId: id,
@@ -65,148 +102,50 @@ async function CampaignAnalyticsContent({ params }: CampaignAnalyticsContentProp
     include: {
       contact: true,
     },
+    orderBy: [
+      { status: 'asc' }, 
+      { sentAt: 'desc' }
+    ],
   });
-  
-  // Calculate statistics
-  const totalCount = deliveries.length;
-  const sentCount = deliveries.filter(d => d.status === 'SENT' || d.status === 'DELIVERED' || d.status === 'OPENED' || d.status === 'CLICKED').length;
-  const openedCount = deliveries.filter(d => d.status === 'OPENED' || d.status === 'CLICKED').length;
-  const clickedCount = deliveries.filter(d => d.status === 'CLICKED').length;
-  const bouncedCount = deliveries.filter(d => d.status === 'BOUNCED').length;
-  const failedCount = deliveries.filter(d => d.status === 'FAILED').length;
-  
-  const openRate = totalCount > 0 ? Math.round((openedCount / totalCount) * 100) : 0;
-  const clickRate = totalCount > 0 ? Math.round((clickedCount / totalCount) * 100) : 0;
   
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Campaign Analytics: {campaign.name}</h1>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <div className="flex items-center">
+            <ChartBarIcon className="h-5 w-5 text-blue-500 mr-2" />
+            <h1 className="text-2xl font-bold text-gray-900">Analytics: {campaign.name}</h1>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Campaign sent on {formatDate(campaign.createdAt)} to {campaign.group.name}
+          </p>
+        </div>
         <Link href={`/campaigns/${id}`}>
-          <Button variant="outline">Back to Campaign</Button>
+          <Button 
+            variant="secondary"
+            size="sm"
+            icon={<ArrowLeftIcon className="h-4 w-4 mr-1.5" />}
+          >
+            Back to Campaign
+          </Button>
         </Link>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <div className="p-4 text-center">
-            <h3 className="text-lg font-medium text-gray-900">Total Recipients</h3>
-            <p className="mt-2 text-3xl font-bold">{totalCount}</p>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="p-4 text-center">
-            <h3 className="text-lg font-medium text-gray-900">Delivered</h3>
-            <p className="mt-2 text-3xl font-bold">{sentCount}</p>
-            <p className="text-sm text-gray-500">{totalCount > 0 ? Math.round((sentCount / totalCount) * 100) : 0}%</p>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="p-4 text-center">
-            <h3 className="text-lg font-medium text-gray-900">Opens</h3>
-            <p className="mt-2 text-3xl font-bold">{openedCount}</p>
-            <p className="text-sm text-gray-500">{openRate}% open rate</p>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="p-4 text-center">
-            <h3 className="text-lg font-medium text-gray-900">Clicks</h3>
-            <p className="mt-2 text-3xl font-bold">{clickedCount}</p>
-            <p className="text-sm text-gray-500">{clickRate}% click rate</p>
-          </div>
-        </Card>
-      </div>
+      <CampaignDetailStats campaignId={id} stats={stats} totalCount={campaign._count.EmailDelivery} />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <div className="p-4 text-center">
-            <h3 className="text-lg font-medium text-gray-900">Bounced</h3>
-            <p className="mt-2 text-3xl font-bold">{bouncedCount}</p>
-            <p className="text-sm text-gray-500">{totalCount > 0 ? Math.round((bouncedCount / totalCount) * 100) : 0}%</p>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="p-4 text-center">
-            <h3 className="text-lg font-medium text-gray-900">Failed</h3>
-            <p className="mt-2 text-3xl font-bold">{failedCount}</p>
-            <p className="text-sm text-gray-500">{totalCount > 0 ? Math.round((failedCount / totalCount) * 100) : 0}%</p>
-          </div>
-        </Card>
-      </div>
-      
-      <Card>
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Delivery Details</h2>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Sent At
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Opened At
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Error
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {deliveries.map((delivery) => (
-                  <tr key={delivery.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {delivery.contact.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(delivery.status)}`}>
-                        {delivery.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {delivery.sentAt ? new Date(delivery.sentAt).toLocaleString() : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {delivery.openedAt ? new Date(delivery.openedAt).toLocaleString() : '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-red-500">
-                      {delivery.errorMessage ?? '-'}
-                    </td>
-                  </tr>
-                ))}
-                
-                {deliveries.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No delivery data available yet
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </Card>
+      <CampaignAnalytics deliveries={deliveries} />
     </div>
   );
 }
 
+// Main page component
 export default function CampaignAnalyticsPage({ params }: PageProps) {
+  const { id } = params;
+  
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Suspense fallback={<div>Loading analytics...</div>}>
-        <CampaignAnalyticsContent params={params} />
+      <Suspense fallback={<AnalyticsPageSkeleton />}>
+        <CampaignAnalyticsContent id={id} />
       </Suspense>
     </div>
   );

@@ -6,12 +6,10 @@ import { authOptions } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
 import { TemplateEditorWrapper } from "../../../components/templates/TemplateEditorWrapper";
 
-// Define the params type correctly for Next.js with readonly
 interface PageProps {
   readonly params: Promise<{ id: string }>;
 }
 
-// Define EmailTemplate interface to match the expected type
 interface EmailTemplate {
   id: string;
   name: string;
@@ -27,7 +25,6 @@ interface TemplateEditorContentProps {
 }
 
 async function TemplateEditorContent({ params }: TemplateEditorContentProps) {
-  // Await the params promise to get the actual values
   const { id } = await params;
   
   const session = await getServerSession(authOptions);
@@ -52,8 +49,6 @@ async function TemplateEditorContent({ params }: TemplateEditorContentProps) {
     notFound();
   }
   
-  // Convert the template to the expected EmailTemplate type
-  // Handle the nullable description field by providing a default empty string
   const templateData: EmailTemplate = {
     id: template.id,
     name: template.name,
@@ -74,8 +69,6 @@ async function TemplateEditorContent({ params }: TemplateEditorContentProps) {
 export default function EditTemplatePage({ params }: PageProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold mb-6">Edit Template</h1>
-      
       <Suspense fallback={<div>Loading template...</div>}>
         <TemplateEditorContent params={params} />
       </Suspense>

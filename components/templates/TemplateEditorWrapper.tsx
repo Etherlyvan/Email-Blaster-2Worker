@@ -7,7 +7,6 @@ import axios, { AxiosError } from "axios";
 import { TemplateEditor } from "./TemplateEditor";
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
 
-// Define the EmailTemplate interface
 interface EmailTemplate {
   id: string;
   name: string;
@@ -18,7 +17,6 @@ interface EmailTemplate {
   updatedAt: string;
 }
 
-// Define an interface for API error responses
 interface ApiErrorResponse {
   error?: string;
   message?: string;
@@ -46,7 +44,6 @@ export function TemplateEditorWrapper({ initialData }: TemplateEditorWrapperProp
     } catch (err) {
       console.error("Error updating template:", err);
       
-      // Type guard to check if err is an AxiosError
       if (axios.isAxiosError(err)) {
         const axiosError = err as AxiosError<ApiErrorResponse>;
         setError(
@@ -58,7 +55,7 @@ export function TemplateEditorWrapper({ initialData }: TemplateEditorWrapperProp
         setError("An unexpected error occurred");
       }
       
-      throw err; // Re-throw to allow TemplateEditor to handle the error UI
+      throw err;
     }
   };
 
