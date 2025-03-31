@@ -1,9 +1,11 @@
-// components/campaigns/CampaignAnalytics.tsx
+// components/campaigns/CampaignAnalytics.tsx - Updated version
 "use client";
 
 import { useState, useEffect } from "react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
+import { toast } from "react-toastify";
+import axios from "axios";
 import { 
   ChartBarIcon, 
   ClockIcon, 
@@ -17,7 +19,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon
+  ChevronDoubleRightIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 
 // Define a type alias for the status
@@ -25,8 +28,6 @@ type EmailStatus = 'PENDING' | 'SENT' | 'DELIVERED' | 'OPENED' | 'CLICKED' | 'BO
 
 // Define a type alias for date values
 type DateValue = Date | string | null;
-
-
 
 // Create a type that can adapt Prisma data to our EmailDelivery interface
 // This helps bridge the gap between Prisma's types and our component's types
@@ -46,12 +47,14 @@ type EmailDeliveryAdapter<T> = {
 
 interface CampaignAnalyticsProps {
   readonly deliveries: readonly EmailDeliveryAdapter<unknown>[];
+  readonly campaignId: string;
 }
 
-export function CampaignAnalytics({ deliveries }: CampaignAnalyticsProps) {
+export function CampaignAnalytics({ deliveries, campaignId }: CampaignAnalyticsProps) {
   const [mounted, setMounted] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -206,6 +209,21 @@ export function CampaignAnalytics({ deliveries }: CampaignAnalyticsProps) {
     document.body.removeChild(link);
   };
   
+  // Function to refresh analytics data
+  const refreshAnalytics = async () => {
+    setIsRefreshing(true);
+    try {
+      await axios.post(`/api/campaigns/${campaignId}/refresh-analytics`);
+      toast.success("Analytics refreshed successfully");
+      window.location.reload(); // Reload the page to show updated data
+    } catch (error) {
+      console.error("Error refreshing analytics:", error);
+      toast.error("Failed to refresh analytics");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  
   // Calculate failed deliveries for the notification section
   const failedCount = deliveries.filter(d => ['BOUNCED', 'FAILED'].includes(d.status)).length;
   
@@ -280,14 +298,25 @@ export function CampaignAnalytics({ deliveries }: CampaignAnalyticsProps) {
             Delivery Details
           </h2>
           
-          <Button 
-            variant="secondary"
-            size="sm"
-            onClick={exportToCsv}
-            icon={<ArrowDownTrayIcon className="h-4 w-4 mr-1.5" />}
-          >
-            Export CSV
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline-secondary"
+              size="sm"
+              onClick={refreshAnalytics}
+              loading={isRefreshing}
+              icon={<ArrowPathIcon className="h-4 w-4 mr-1.5" />}
+            >
+              Refresh Analytics
+            </Button>
+            <Button 
+              variant="secondary"
+              size="sm"
+              onClick={exportToCsv}
+              icon={<ArrowDownTrayIcon className="h-4 w-4 mr-1.5" />}
+            >
+              Export CSV
+            </Button>
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row justify-between gap-4 mb-6">
@@ -423,7 +452,7 @@ export function CampaignAnalytics({ deliveries }: CampaignAnalyticsProps) {
                 Showing {Math.min(totalItems, startIndex + 1)}-{Math.min(totalItems, startIndex + pageSize)} of {totalItems} recipients
                 {(searchTerm || statusFilter) && " with the current filters"}
               </div>
-              
+        
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-700">Rows per page:</span>

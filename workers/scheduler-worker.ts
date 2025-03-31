@@ -1,5 +1,6 @@
-// workers/scheduler-worker.ts
-import { connectToRabbitMQ, EMAIL_QUEUE, SCHEDULER_QUEUE,sendToQueue } from '../lib/rabbitmq';
+// workers/scheduler-worker.ts - Perbaikan lengkap
+
+import { connectToRabbitMQ, EMAIL_QUEUE, SCHEDULER_QUEUE, sendToQueue } from '../lib/rabbitmq';
 import { prisma } from '../lib/db';
 
 async function processSchedulerQueue() {
@@ -7,7 +8,7 @@ async function processSchedulerQueue() {
   
   console.log('Scheduler worker started, waiting for messages...');
   
-  // Process scheduler tasks (for newly scheduled campaigns)
+  // Proses pesan dari SCHEDULER_QUEUE
   channel.consume(SCHEDULER_QUEUE, async (msg) => {
     if (!msg) return;
     
@@ -22,7 +23,7 @@ async function processSchedulerQueue() {
         return;
       }
       
-      // Verify the campaign exists and is in SCHEDULED status
+      // Verifikasi kampanye ada dan statusnya SCHEDULED
       const campaign = await prisma.campaign.findUnique({
         where: { id: campaignId }
       });
@@ -33,28 +34,44 @@ async function processSchedulerQueue() {
         return;
       }
       
+      // Jika kampanye belum berstatus SCHEDULED, update statusnya
       if (campaign.status !== 'SCHEDULED') {
-        console.warn(`Campaign ${campaignId} is not in SCHEDULED status (current: ${campaign.status}), acknowledging message`);
-        channel.ack(msg);
-        return;
+        console.log(`Setting campaign ${campaignId} status to SCHEDULED`);
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { 
+            status: 'SCHEDULED',
+            schedule: new Date(scheduledTime)
+          }
+        });
+      }
+      
+      // Pastikan jadwal tersimpan dengan benar
+      if (!campaign.schedule) {
+        console.log(`Updating campaign ${campaignId} schedule to ${scheduledTime}`);
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { schedule: new Date(scheduledTime) }
+        });
       }
       
       console.log(`Campaign ${campaignId} verified as SCHEDULED for ${scheduledTime}`);
+      console.log(`It will be sent automatically at the scheduled time`);
       
-      // Simply acknowledge the message - we'll check for scheduled campaigns in the periodic task
+      // Acknowledge message - kampanye akan dicek oleh fungsi periodic
       channel.ack(msg);
     } catch (error) {
       console.error('Error processing scheduler task:', error);
-      // Requeue the message if it's a temporary error
+      // Requeue jika error sementara
       channel.nack(msg, false, true);
     }
   });
   
-  // Check for scheduled campaigns periodically
+  // Cek kampanye terjadwal secara berkala
   const checkScheduledCampaigns = async () => {
     try {
       const now = new Date();
-      console.log(`Checking for scheduled campaigns at ${now.toISOString()}`);
+      console.log(`[Scheduler] Checking for scheduled campaigns at ${now.toISOString()}`);
       
       // Find campaigns that are scheduled to be sent now or in the past
       const scheduledCampaigns = await prisma.campaign.findMany({
@@ -66,11 +83,11 @@ async function processSchedulerQueue() {
         },
       });
       
-      console.log(`Found ${scheduledCampaigns.length} campaigns ready to be sent`);
+      console.log(`[Scheduler] Found ${scheduledCampaigns.length} campaigns ready to be sent`);
       
       // Process each scheduled campaign
       for (const campaign of scheduledCampaigns) {
-        console.log(`Processing scheduled campaign: ${campaign.id}, scheduled for: ${campaign.schedule}`);
+        console.log(`[Scheduler] Processing scheduled campaign: ${campaign.id}, scheduled for: ${campaign.schedule?.toISOString()}`);
         
         try {
           // Update campaign status to SENDING
@@ -79,25 +96,28 @@ async function processSchedulerQueue() {
             data: { status: 'SENDING' },
           });
           
-          console.log(`Updated campaign ${campaign.id} status to SENDING`);
+          console.log(`[Scheduler] Updated campaign ${campaign.id} status to SENDING`);
           
           // Send to email queue for processing
-          await sendToQueue(EMAIL_QUEUE, { campaignId: campaign.id });
+          await sendToQueue(EMAIL_QUEUE, { 
+            campaignId: campaign.id,
+            fromScheduler: true,  // Add a flag to indicate this came from the scheduler
+          });
           
-          console.log(`Campaign ${campaign.id} sent to EMAIL_QUEUE for processing`);
+          console.log(`[Scheduler] Campaign ${campaign.id} sent to EMAIL_QUEUE for processing`);
         } catch (updateError) {
-          console.error(`Error processing scheduled campaign ${campaign.id}:`, updateError);
+          console.error(`[Scheduler] Error processing scheduled campaign ${campaign.id}:`, updateError);
         }
       }
     } catch (error) {
-      console.error('Error checking scheduled campaigns:', error);
+      console.error('[Scheduler] Error checking scheduled campaigns:', error);
     }
     
-    // Schedule next check (every minute)
-    setTimeout(checkScheduledCampaigns, 60000);
+    // Schedule next check (every 30 seconds for more precise scheduling)
+    setTimeout(checkScheduledCampaigns, 30000);
   };
   
-  // Start the periodic check immediately
+  // Mulai pengecekan berkala segera
   console.log('Starting periodic check for scheduled campaigns');
   checkScheduledCampaigns();
   

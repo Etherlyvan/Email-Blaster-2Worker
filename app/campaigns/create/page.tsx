@@ -88,15 +88,37 @@ async function CreateCampaignContent() {
       throw new Error("Unauthorized");
     }
     
+    console.log("Create campaign called with:", { 
+      sendNow, 
+      hasSchedule: !!data.schedule,
+      scheduledTime: data.schedule ? new Date(data.schedule).toISOString() : null
+    });
+    
     let status: 'DRAFT' | 'SCHEDULED' | 'SENDING' = 'DRAFT';
     let schedule: Date | undefined = undefined;
     
-    if (sendNow) {
-      status = 'SENDING';
-    } else if (data.schedule) {
+    // PENTING: Jika ada jadwal, prioritaskan jadwal meskipun sendNow=true
+    if (data.schedule) {
       status = 'SCHEDULED';
       schedule = new Date(data.schedule);
+      
+      // Pastikan waktu jadwal di masa depan
+      const now = new Date();
+      if (schedule <= now) {
+        throw new Error("Waktu jadwal harus di masa depan");
+      }
+      
+      // Log untuk debugging
+      console.log(`Scheduling campaign for: ${schedule.toISOString()}`);
+      
+      // Memastikan sendNow adalah false jika ada jadwal
+      sendNow = false;
+    } else if (sendNow) {
+      status = 'SENDING';
     }
+    
+    // Log untuk debugging
+    console.log(`Creating campaign with status: ${status}`);
     
     const campaign = await prisma.campaign.create({
       data: {
@@ -113,16 +135,22 @@ async function CreateCampaignContent() {
       },
     });
     
-    // If sending now, queue it for immediate processing
+    console.log(`Campaign created with ID: ${campaign.id}, status: ${campaign.status}`);
+    
+    // Hanya kirim ke antrian EMAIL_QUEUE jika memang ingin dikirim sekarang
     if (sendNow) {
+      console.log(`Sending campaign ${campaign.id} to EMAIL_QUEUE for immediate delivery`);
       await sendToQueue(EMAIL_QUEUE, { campaignId: campaign.id });
     } 
-    // If scheduled, add to scheduler queue
+    // Jika terjadwal, kirim ke SCHEDULER_QUEUE (hanya info jadwal, bukan untuk diproses sekarang)
     else if (schedule) {
+      console.log(`Sending campaign ${campaign.id} to SCHEDULER_QUEUE for scheduled delivery at ${schedule.toISOString()}`);
       await sendToQueue(SCHEDULER_QUEUE, { 
         campaignId: campaign.id,
         scheduledTime: schedule.toISOString()
       });
+    } else {
+      console.log(`Campaign ${campaign.id} saved as draft`);
     }
     
     revalidatePath("/campaigns");

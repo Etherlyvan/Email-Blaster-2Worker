@@ -1,7 +1,7 @@
 // components/campaigns/CampaignForm.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,17 +16,16 @@ import { EmailEditor } from "../editor/EmailEditor";
 import { Button } from "../ui/Button";
 import { TemplateSelector } from "./TemplateSelector";
 import { TemplateVariablesHelp } from "./TemplateVariablesHelp";
+import { SenderSelector } from "./SenderSelector";
 import { 
   EnvelopeIcon, 
-  UserIcon, 
   PaperAirplaneIcon, 
   ClockIcon,
   DocumentTextIcon,
   TagIcon,
   KeyIcon,
   ArrowPathIcon,
-  CheckCircleIcon,
-  PlusCircleIcon
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { Tab } from '@headlessui/react';
 
@@ -42,6 +41,13 @@ interface EmailTemplate {
   htmlContent: string;
 }
 
+interface Sender {
+  id: string;
+  name: string;
+  email: string;
+  isVerified: boolean;
+}
+
 const campaignSchema = z.object({
   name: z.string().min(1, "Name is required"),
   subject: z.string().min(1, "Subject is required"),
@@ -49,6 +55,7 @@ const campaignSchema = z.object({
   senderEmail: z.string().email("Valid email is required"),
   content: z.string(),
   brevoKeyId: z.string().min(1, "Brevo key is required"),
+  brevoSenderId: z.string().optional(),
   groupId: z.string().min(1, "Contact group is required"),
   templateId: z.string().optional(),
   schedule: z.date().optional(),
@@ -99,71 +106,6 @@ function ClientHelperText({ text }: { text: string }) {
   return <p className="mt-1 text-xs text-gray-500">{text}</p>;
 }
 
-// Component for inserting variables into the subject
-function SubjectVariableSelector({ 
-  variables, 
-  onSelectVariable 
-}: { 
-  variables: string[], 
-  onSelectVariable: (variable: string) => void 
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-  
-  if (variables.length === 0) {
-    return null;
-  }
-  
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        aria-label="Insert variable"
-        title="Insert variable"
-      >
-        <PlusCircleIcon className="h-4 w-4" aria-hidden="true" />
-      </button>
-      
-      {isOpen && (
-        <div className="absolute z-10 mt-1 w-56 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm right-0">
-          <div className="px-3 py-2 text-xs font-medium text-gray-600 border-b">
-            Insert Variable
-          </div>
-          {variables.map((variable) => (
-            <button
-              key={variable}
-              type="button"
-              className="text-gray-900 hover:bg-blue-50 hover:text-blue-700 block px-4 py-2 text-sm w-full text-left"
-              onClick={() => {
-                onSelectVariable(`{${variable}}`);
-                setIsOpen(false);
-              }}
-            >
-              {`{${variable}}`}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Main component wrapped with client-only rendering
 function ClientCampaignForm(props: CampaignFormProps) {
   const {
@@ -183,7 +125,8 @@ function ClientCampaignForm(props: CampaignFormProps) {
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
   const [isSendNow, setIsSendNow] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const subjectInputRef = useRef<HTMLInputElement>(null);
+  const [senders, setSenders] = useState<Sender[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
   
   const {
     register,
@@ -193,10 +136,12 @@ function ClientCampaignForm(props: CampaignFormProps) {
     setValue,
     formState: { errors, isDirty },
     reset,
+    trigger,
   } = useForm<CampaignFormData>({
     resolver: zodResolver(campaignSchema),
     defaultValues: initialData ?? {
       content: "<div style='font-family: Arial, sans-serif;'><p>Write your email content here...</p></div>",
+      subject: "",
     },
   });
   
@@ -206,6 +151,7 @@ function ClientCampaignForm(props: CampaignFormProps) {
   const templateId = watch("templateId");
   const name = watch("name");
   const subject = watch("subject");
+  const brevoSenderId = watch("brevoSenderId");
   
   // Update hasChanges state based on form state
   useEffect(() => {
@@ -228,6 +174,31 @@ function ClientCampaignForm(props: CampaignFormProps) {
     
     fetchTemplates();
   }, []);
+  
+  // Fetch senders
+  useEffect(() => {
+    async function fetchSenders() {
+      try {
+        const response = await axios.get('/api/senders');
+        setSenders(response.data.filter((sender: Sender) => sender.isVerified));
+      } catch (error) {
+        console.error("Error fetching senders:", error);
+      }
+    }
+    
+    fetchSenders();
+  }, []);
+  
+  // Update sender name and email when a sender is selected
+  useEffect(() => {
+    if (brevoSenderId) {
+      const selectedSender = senders.find(sender => sender.id === brevoSenderId);
+      if (selectedSender) {
+        setValue("senderName", selectedSender.name);
+        setValue("senderEmail", selectedSender.email);
+      }
+    }
+  }, [brevoSenderId, senders, setValue]);
   
   // Check for template ID from URL params passed as prop
   useEffect(() => {
@@ -276,26 +247,33 @@ function ClientCampaignForm(props: CampaignFormProps) {
     }
   };
   
-  // Handle inserting a variable into the subject field
-  const handleInsertSubjectVariable = (variable: string) => {
-    const input = subjectInputRef.current;
-    if (!input) return;
+  // Function to validate all required fields
+  const validateRequiredFields = async () => {
+    // Trigger validation for all fields
+    const isValid = await trigger();
     
-    const start = input.selectionStart || 0;
-    const end = input.selectionEnd || 0;
-    const currentValue = input.value;
+    if (!isValid) {
+      setFormError("Please fill in all required fields before sending");
+      return false;
+    }
     
-    const newValue = currentValue.substring(0, start) + variable + currentValue.substring(end);
+    // Double-check critical fields
+    const currentSubject = watch("subject");
+    const currentName = watch("name");
+    const currentSenderName = watch("senderName");
+    const currentSenderEmail = watch("senderEmail");
+    const currentBrevoKeyId = watch("brevoKeyId");
+    const currentGroupId = watch("groupId");
+    const currentContent = watch("content");
     
-    setValue("subject", newValue, { shouldDirty: true });
+    if (!currentSubject || !currentName || !currentSenderName || 
+        !currentSenderEmail || !currentBrevoKeyId || !currentGroupId || !currentContent) {
+      setFormError("Please fill in all required fields before sending");
+      return false;
+    }
     
-    // Set cursor position after the inserted variable
-    setTimeout(() => {
-      if (input) {
-        input.focus();
-        input.setSelectionRange(start + variable.length, start + variable.length);
-      }
-    }, 0);
+    setFormError(null);
+    return true;
   };
   
   const handleTemplateSelect = (templateId: string, htmlContent: string) => {
@@ -307,8 +285,28 @@ function ClientCampaignForm(props: CampaignFormProps) {
     }
   };
   
+  // Handle tab change
+  const handleTabChange = (index: number) => {
+    // Save current form state
+    const currentFormValues = watch();
+    
+    // Switch tabs
+    setSelectedTabIndex(index);
+    
+    // After tab switch, restore form values
+    setTimeout(() => {
+      Object.entries(currentFormValues).forEach(([key, value]) => {
+        if (value !== undefined && key !== 'content') {
+          // Use type assertion with a more specific type instead of 'any'
+          setValue(key as keyof CampaignFormData, value);
+        }
+      });
+    }, 0);
+  };
+  
   const handleSaveAsDraft = handleSubmit(async (data) => {
     if (isSubmitting) return;
+    setFormError(null);
     setIsSubmitting(true);
     
     try {
@@ -316,7 +314,7 @@ function ClientCampaignForm(props: CampaignFormProps) {
       reset(data); // Reset to prevent isDirty after saving
     } catch (error) {
       console.error("Error saving draft:", error);
-      alert("Failed to save draft. Please try again.");
+      setFormError("Failed to save draft. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -324,19 +322,43 @@ function ClientCampaignForm(props: CampaignFormProps) {
   
   const handleSendNow = handleSubmit(async (data) => {
     if (isSubmitting) return;
+    setFormError(null);
+    
+    // Validate all required fields first
+    const isValid = await validateRequiredFields();
+    if (!isValid) {
+      return;
+    }
+    
     setIsSubmitting(true);
     setIsSendNow(true);
     
     try {
-      await onSubmitAction(data, true);
+      // If there's a schedule, don't use sendNow=true
+      const isScheduled = !!data.schedule;
+      
+      // If scheduled, make sure we don't use sendNow=true
+      await onSubmitAction(data, !isScheduled);
+      
       reset(data); // Reset to prevent isDirty after saving
     } catch (error) {
       console.error("Error sending campaign:", error);
-      alert("Failed to send campaign. Please try again.");
-    } finally {
+      
+      // Display specific error message
+      if (error instanceof Error) {
+        setFormError(`Failed to send campaign: ${error.message}`);
+      } else {
+        setFormError("Failed to send campaign. Please try again.");
+      }
+      
+      // Important: Return early to prevent further execution
       setIsSubmitting(false);
       setIsSendNow(false);
+      return;
     }
+    
+    setIsSubmitting(false);
+    setIsSendNow(false);
   });
   
   const handleCancel = useCallback(() => {
@@ -357,8 +379,17 @@ function ClientCampaignForm(props: CampaignFormProps) {
   
   return (
     <div className="space-y-6">
+      {formError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-start">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>{formError}</span>
+        </div>
+      )}
+      
       <div className="mb-6">
-        <Tab.Group selectedIndex={selectedTabIndex} onChange={setSelectedTabIndex}>
+        <Tab.Group selectedIndex={selectedTabIndex} onChange={handleTabChange}>
           <Tab.List className="flex space-x-2 rounded-xl bg-blue-50 p-1">
             {tabItems.map((item) => (
               <Tab
@@ -410,68 +441,33 @@ function ClientCampaignForm(props: CampaignFormProps) {
                         icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
                         text="Email Subject*"
                       />
-                      <div className="mt-1 relative">
+                      <div className="mt-1">
                         <Input
                           id={`${formId}-subject`}
                           type="text"
                           {...register("subject")}
                           placeholder="Don't miss our summer sale!"
                           error={errors.subject?.message}
-                          className="py-3 pr-10"
-                          ref={subjectInputRef}
-                        />
-                        {availableVariables.length > 0 && (
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                            <SubjectVariableSelector 
-                              variables={availableVariables} 
-                              onSelectVariable={handleInsertSubjectVariable} 
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <ClientHelperText text={availableVariables.length > 0 
-                        ? "You can personalize the subject with contact variables"
-                        : "The subject line recipients will see in their inbox"} 
-                      />
-                    </div>
-                    
-                    <div>
-                      <ClientLabel 
-                        htmlFor={`${formId}-senderName`} 
-                        icon={<UserIcon className="h-5 w-5 text-gray-400" />}
-                        text="Sender Name*"
-                      />
-                      <div className="mt-1">
-                        <Input
-                          id={`${formId}-senderName`}
-                          type="text"
-                          {...register("senderName")}
-                          placeholder="John Doe"
-                          error={errors.senderName?.message}
                           className="py-3"
                         />
                       </div>
-                      <ClientHelperText text="The name that will appear as the sender" />
+                      <ClientHelperText text="The subject line recipients will see in their inbox" />
                     </div>
                     
                     <div>
-                      <ClientLabel 
-                        htmlFor={`${formId}-senderEmail`} 
-                        icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
-                        text="Sender Email*"
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sender
+                      </label>
+                      <SenderSelector 
+                        selectedSenderId={brevoSenderId || null}
+                        onSelectSender={(sender) => {
+                          setValue("brevoSenderId", sender.id);
+                          setValue("senderName", sender.name);
+                          setValue("senderEmail", sender.email);
+                        }}
                       />
-                      <div className="mt-1">
-                        <Input
-                          id={`${formId}-senderEmail`}
-                          type="email"
-                          {...register("senderEmail")}
-                          placeholder="john@example.com"
-                          error={errors.senderEmail?.message}
-                          className="py-3"
-                        />
-                      </div>
-                      <ClientHelperText text="The email address that will appear as the sender" />
                     </div>
+
                   </div>
                   
                   <div className="space-y-6">
@@ -610,7 +606,7 @@ function ClientCampaignForm(props: CampaignFormProps) {
                   <div className="flex space-x-3">
                     <Button 
                       variant="outline-primary"
-                      onClick={() => setSelectedTabIndex(1)}
+                      onClick={() => handleTabChange(1)}
                     >
                       Next: Email Content
                     </Button>
@@ -641,7 +637,7 @@ function ClientCampaignForm(props: CampaignFormProps) {
                     <Button
                       variant="outline-secondary"
                       size="sm"
-                      onClick={() => setSelectedTabIndex(0)}
+                      onClick={() => handleTabChange(0)}
                       icon={<ArrowPathIcon className="h-4 w-4 mr-1" />}
                     >
                       Back to Details

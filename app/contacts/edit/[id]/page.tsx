@@ -6,9 +6,7 @@ import { authOptions } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/db";
 import { ContactForm } from "../../../../components/contacts/ContactForm";
 
-interface PageProps {
-  readonly params: { id: string };
-}
+
 
 function ContactEditSkeleton() {
   return (
@@ -41,7 +39,7 @@ function ContactEditSkeleton() {
   );
 }
 
-// Fixed the parameter to be readonly
+// Updated to accept Promise params
 async function ContactEditContent({ id }: { readonly id: string }) {
   const session = await getServerSession(authOptions);
   
@@ -102,8 +100,9 @@ async function ContactEditContent({ id }: { readonly id: string }) {
   );
 }
 
-export default function EditContactPage({ params }: PageProps) {
-  const { id } = params;
+export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
+  // Await the params promise to get the actual id
+  const { id } = await params;
   
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -8,6 +8,7 @@ import { sendToQueue, EMAIL_QUEUE, SCHEDULER_QUEUE } from "../../../lib/rabbitmq
 import { CampaignStatus } from "@prisma/client";
 
 
+// Update the campaign schema to include brevoSenderId
 const campaignSchema = z.object({
   name: z.string().min(1, "Name is required"),
   subject: z.string().min(1, "Subject is required"),
@@ -15,6 +16,7 @@ const campaignSchema = z.object({
   senderEmail: z.string().email("Valid email is required"),
   content: z.string(), 
   brevoKeyId: z.string().min(1, "Brevo key is required"),
+  brevoSenderId: z.string().optional(), // Add this line
   groupId: z.string().min(1, "Contact group is required"),
   schedule: z.string().datetime().optional(),
   sendNow: z.boolean().optional(),
@@ -105,34 +107,73 @@ export async function POST(request: NextRequest) {
     const validatedData = campaignSchema.parse(json);
     const { sendNow, schedule, ...campaignData } = validatedData;
     
-    // Determine the status based on sendNow and schedule
-    let status: 'DRAFT' | 'SCHEDULED' | 'SENDING' = 'DRAFT';
+    console.log("API - Creating campaign with params:", { 
+      sendNow, 
+      hasSchedule: !!schedule,
+      scheduleTime: schedule ? new Date(schedule).toISOString() : null
+    });
     
-    if (sendNow) {
-      status = 'SENDING';
-    } else if (schedule) {
-      status = 'SCHEDULED';
+    // Additional validation for required fields
+    if (!campaignData.subject || !campaignData.name || !campaignData.senderName || 
+        !campaignData.senderEmail || !campaignData.brevoKeyId || !campaignData.groupId) {
+      return new NextResponse(JSON.stringify({ 
+        error: "Missing required fields for campaign creation" 
+      }), {
+        status: 400,
+      });
     }
     
-    // Create the campaign (note that htmlContent field is removed)
+    // Determine the status based on sendNow and schedule
+    let status: 'DRAFT' | 'SCHEDULED' | 'SENDING' = 'DRAFT';
+    let scheduleDate = undefined;
+    
+    // PENTING: Prioritaskan jadwal jika ada
+    if (schedule) {
+      status = 'SCHEDULED';
+      scheduleDate = new Date(schedule);
+      
+      // Make sure the schedule is in the future
+      const now = new Date();
+      if (scheduleDate <= now) {
+        return new NextResponse(JSON.stringify({ 
+          error: "Schedule date must be in the future" 
+        }), {
+          status: 400,
+        });
+      }
+      
+      // Force sendNow to false if there's a schedule
+      console.log(`API - Campaign will be scheduled for ${scheduleDate.toISOString()}, not sending now`);
+    } else if (sendNow) {
+      status = 'SENDING';
+      console.log(`API - Campaign will be sent immediately`);
+    } else {
+      console.log(`API - Campaign will be saved as draft`);
+    }
+    
+    // Create the campaign
     const campaign = await prisma.campaign.create({
       data: {
         ...campaignData,
         status,
-        schedule: schedule ? new Date(schedule) : undefined,
+        schedule: scheduleDate,
         userId: session.user.id,
       },
     });
     
-    // If sending now, queue it for immediate processing
-    if (sendNow) {
+    console.log(`API - Campaign created with ID: ${campaign.id}, status: ${campaign.status}`);
+    
+    // If sending now (and no schedule), queue it for immediate processing
+    if (status === 'SENDING') {
+      console.log(`API - Sending campaign ${campaign.id} to EMAIL_QUEUE for immediate delivery`);
       await sendToQueue(EMAIL_QUEUE, { campaignId: campaign.id });
     } 
     // If scheduled, add to scheduler queue
-    else if (schedule) {
+    else if (status === 'SCHEDULED' && scheduleDate) {
+      console.log(`API - Sending campaign ${campaign.id} to SCHEDULER_QUEUE for scheduled delivery at ${scheduleDate.toISOString()}`);
       await sendToQueue(SCHEDULER_QUEUE, { 
         campaignId: campaign.id,
-        scheduledTime: schedule
+        scheduledTime: scheduleDate.toISOString()
       });
     }
     
@@ -145,7 +186,10 @@ export async function POST(request: NextRequest) {
     }
     
     console.error("Error creating campaign:", error);
-    return new NextResponse(JSON.stringify({ error: "Failed to create campaign" }), {
+    return new NextResponse(JSON.stringify({ 
+      error: "Failed to create campaign",
+      details: error instanceof Error ? error.message : "Unknown error"
+    }), {
       status: 500,
     });
   }

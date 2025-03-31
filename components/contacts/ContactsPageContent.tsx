@@ -1,7 +1,7 @@
 // components/contacts/ContactsPageContent.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/Button";
@@ -36,20 +36,12 @@ interface Contact {
   createdAt: string | Date;
 }
 
-interface PaginationInfo {
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  pageSize: number;
-}
-
 interface ContactsPageContentProps {
   readonly contacts: Contact[];
   readonly groups: ContactGroup[];
-  readonly pagination?: PaginationInfo;
 }
 
-export function ContactsPageContent({ contacts, groups, pagination }: ContactsPageContentProps) {
+export function ContactsPageContent({ contacts, groups }: ContactsPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(
@@ -60,6 +52,13 @@ export function ContactsPageContent({ contacts, groups, pagination }: ContactsPa
   const [view, setView] = useState<"list" | "cards">("list");
   const [isRefreshing, setIsRefreshing] = useState(false);
   
+  // Get current page from URL or default to 1
+  const currentPage = searchParams?.get("page") 
+    ? parseInt(searchParams.get("page") ?? "1", 10) 
+    : 1;
+  
+  const pageSize = 10; // Number of contacts per page
+  
   // Extract all unique tags from contacts' additionalData
   const allTags = new Set<string>();
   contacts.forEach(contact => {
@@ -69,23 +68,37 @@ export function ContactsPageContent({ contacts, groups, pagination }: ContactsPa
   });
   
   // Filter contacts based on search, group, and tag
-  const filteredContacts = contacts.filter(contact => {
-    // Filter by search term (email or any additionalData value)
-    const matchesSearch = !searchTerm || 
-      contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (contact.additionalData && 
-        Object.entries(contact.additionalData).some(([, value]) => 
-          String(value).toLowerCase().includes(searchTerm.toLowerCase())
-        ));
-    
-    // Filter by group - not needed as server already filtered by group
-    
-    // Filter by tag (additionalData key)
-    const matchesTag = !tagFilter || 
-      (contact.additionalData && tagFilter in contact.additionalData);
-    
-    return matchesSearch && matchesTag;
-  });
+  const filteredContacts = useMemo(() => {
+    return contacts.filter(contact => {
+      // Filter by search term (email or any additionalData value)
+      const matchesSearch = !searchTerm || 
+        contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (contact.additionalData && 
+          Object.entries(contact.additionalData).some(([, value]) => 
+            String(value).toLowerCase().includes(searchTerm.toLowerCase())
+          ));
+      
+      // Filter by group
+      const matchesGroup = !selectedGroupId || 
+        contact.groupContacts.some((gc: GroupContact) => gc.contactGroup.id === selectedGroupId);
+      
+      // Filter by tag (additionalData key)
+      const matchesTag = !tagFilter || 
+        (contact.additionalData && tagFilter in contact.additionalData);
+      
+      return matchesSearch && matchesGroup && matchesTag;
+    });
+  }, [contacts, searchTerm, selectedGroupId, tagFilter]);
+  
+  // Apply pagination
+  const totalItems = filteredContacts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  
+  // Get current page items
+  const currentItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredContacts.slice(startIndex, startIndex + pageSize);
+  }, [filteredContacts, currentPage, pageSize]);
   
   // Handle group selection change
   useEffect(() => {
@@ -162,32 +175,28 @@ export function ContactsPageContent({ contacts, groups, pagination }: ContactsPa
             onViewChangeAction={setView}
           />
           
-          {filteredContacts.length > 0 ? (
+          {currentItems.length > 0 ? (
             <>
               <ContactList 
-                contacts={filteredContacts} 
+                contacts={currentItems} 
                 view={view}
                 onRefreshAction={handleRefresh}
               />
               
-              {pagination && (
-                <>
-                  <div className="mt-6 border-t border-gray-200 pt-4 text-sm text-gray-500 flex justify-between items-center">
-                    <div>
-                      Showing {Math.min(pagination.totalItems, (pagination.currentPage - 1) * pagination.pageSize + 1)} to {Math.min(pagination.totalItems, pagination.currentPage * pagination.pageSize)} of {pagination.totalItems} contacts
-                    </div>
-                  </div>
-                  
-                  <Pagination 
-                    currentPage={pagination.currentPage}
-                    totalPages={pagination.totalPages}
-                    baseUrl="/contacts"
-                    queryParams={{
-                      groupId: selectedGroupId || undefined
-                    }}
-                  />
-                </>
-              )}
+              <div className="mt-6 border-t border-gray-200 pt-4 text-sm text-gray-500 flex justify-between items-center">
+                <div>
+                  Showing {Math.min(totalItems, (currentPage - 1) * pageSize + 1)} to {Math.min(totalItems, currentPage * pageSize)} of {totalItems} contacts
+                </div>
+              </div>
+              
+              <Pagination 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                baseUrl="/contacts"
+                queryParams={{
+                  groupId: selectedGroupId ?? undefined
+                }}
+              />
             </>
           ) : (
             <div className="text-center py-12 bg-gray-50 rounded-lg mt-6">

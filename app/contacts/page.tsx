@@ -23,7 +23,6 @@ function ContactsPageSkeleton() {
             <div className="h-10 w-40 bg-gray-100 rounded-md animate-pulse"></div>
           </div>
           <div className="space-y-3">
-            {/* Fixed: Don't use array index as key */}
             <div key="skeleton-1" className="h-16 bg-gray-100 rounded-md animate-pulse"></div>
             <div key="skeleton-2" className="h-16 bg-gray-100 rounded-md animate-pulse"></div>
             <div key="skeleton-3" className="h-16 bg-gray-100 rounded-md animate-pulse"></div>
@@ -36,49 +35,17 @@ function ContactsPageSkeleton() {
   );
 }
 
-interface ContactsContentProps {
-  readonly page: number;
-  readonly groupId?: string;
-}
-
-async function ContactsContent({ page, groupId }: ContactsContentProps) {
+async function ContactsContent() {
   const session = await getServerSession(authOptions);
   
   if (!session?.user) {
     redirect("/dashboard");
   }
   
-  const pageSize = 10; // Number of contacts per page
-  
-  // Build the where clause for the query with proper typing
-  // Fixed: Use a properly typed where clause instead of any
-  const whereClause: {
-    userId: string;
-    groupContacts?: {
-      some: {
-        contactGroupId: string;
-      };
-    };
-  } = { 
-    userId: session.user.id 
-  };
-  
-  // Add group filter if provided
-  if (groupId) {
-    whereClause.groupContacts = {
-      some: {
-        contactGroupId: groupId
-      }
-    };
-  }
-  
-  // Execute queries in parallel
-  const [contactsData, totalContacts, contactGroups] = await Promise.all([
-    // Get paginated contacts
+  // Get all contacts (no pagination applied here)
+  const [contacts, contactGroups] = await Promise.all([
     prisma.contact.findMany({
-      where: whereClause,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      where: { userId: session.user.id },
       include: {
         groupContacts: {
           include: {
@@ -97,12 +64,6 @@ async function ContactsContent({ page, groupId }: ContactsContentProps) {
       orderBy: { createdAt: "desc" },
     }),
     
-    // Get total count for pagination
-    prisma.contact.count({
-      where: whereClause
-    }),
-    
-    // Get all contact groups
     prisma.contactGroup.findMany({
       where: { userId: session.user.id },
       orderBy: { name: "asc" },
@@ -111,7 +72,7 @@ async function ContactsContent({ page, groupId }: ContactsContentProps) {
   
   // Get email stats for each contact
   const contactsWithStats = await Promise.all(
-    contactsData.map(async (contact) => {
+    contacts.map(async (contact) => {
       const stats = await prisma.emailDelivery.groupBy({
         by: ['status'],
         where: { contactId: contact.id },
@@ -141,29 +102,16 @@ async function ContactsContent({ page, groupId }: ContactsContentProps) {
     <ContactsPageContent 
       contacts={contactsWithStats} 
       groups={contactGroups}
-      pagination={{
-        currentPage: page,
-        totalPages: Math.ceil(totalContacts / pageSize),
-        totalItems: totalContacts,
-        pageSize
-      }}
     />
   );
 }
 
-// Fixed: Mark props as readonly
-export default function ContactsPage({
-  searchParams
-}: {
-  readonly searchParams: { readonly page?: string, readonly groupId?: string }
-}) {
-  // Parse page parameter, default to 1
-  const page = searchParams.page ? parseInt(searchParams.page, 10) : 1;
-  
+// Fixed: No longer using searchParams directly
+export default function ContactsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Suspense fallback={<ContactsPageSkeleton />}>
-        <ContactsContent page={page} groupId={searchParams.groupId} />
+        <ContactsContent />
       </Suspense>
     </div>
   );

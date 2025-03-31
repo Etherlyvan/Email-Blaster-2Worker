@@ -58,11 +58,6 @@ function CampaignDetailSkeleton() {
   );
 }
 
-// Type definition for params
-interface PageProps {
-  params: { id: string };
-}
-
 function getStatusBadgeClasses(status: string): string {
   switch (status) {
     case 'SENT':
@@ -323,9 +318,10 @@ async function CampaignDetail({ id }: { id: string }) {
   );
 }
 
-// Main page component
-export default async function CampaignDetailPage({ params }: PageProps) {
-  const { id } = params;
+// Main page component with Promise params as required by your Next.js config
+export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // Await the params promise to get the actual id
+  const { id } = await params;
   
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

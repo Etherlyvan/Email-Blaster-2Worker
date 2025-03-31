@@ -17,6 +17,7 @@ const navigation = [
   { name: "Templates", href: "/templates" },
   { name: "Contacts", href: "/contacts" },
   { name: "Groups", href: "/groups" },
+  { name: "Senders", href: "/senders" }, 
   { name: "Settings", href: "/settings" },
 ];
 

@@ -24,31 +24,38 @@ interface CampaignWithRelations extends Campaign {
 }
 
 /**
- * Process template variables in the HTML content
- * @param content The HTML content with template variables
+ * Process template variables in the HTML content or subject
+ * @param content The HTML content or subject with template variables
  * @param contact The contact object with data to replace variables
- * @returns Processed HTML content with variables replaced
+ * @returns Processed content with variables replaced
  */
 function processTemplateVariables(content: string, contact: ContactData): string {
   let processedContent = content;
   
   // Always replace email
   processedContent = processedContent.replace(/{{email}}/g, contact.email);
+  processedContent = processedContent.replace(/{email}/g, contact.email);
   
   // Replace other variables from additionalData
   if (contact.additionalData) {
     Object.entries(contact.additionalData).forEach(([key, value]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
+      // Handle both double-bracket and single-bracket formats
+      const doubleRegex = new RegExp(`{{${key}}}`, 'g');
+      const singleRegex = new RegExp(`{${key}}`, 'g');
+      
       // Convert value to string safely, handling objects and other types
       const safeValue = typeof value === 'object' && value !== null 
         ? JSON.stringify(value) 
         : String(value ?? '');
-      processedContent = processedContent.replace(regex, safeValue);
+      
+      processedContent = processedContent.replace(doubleRegex, safeValue);
+      processedContent = processedContent.replace(singleRegex, safeValue);
     });
   }
   
   // Remove any remaining template variables with empty string
   processedContent = processedContent.replace(/{{[^}]+}}/g, '');
+  processedContent = processedContent.replace(/{[^}]+}/g, '');
   
   return processedContent;
 }
@@ -59,8 +66,11 @@ async function sendEmailToContact(
   contact: ContactData
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    // Process template variables
+    // Process template variables in content
     const personalizedHtml = processTemplateVariables(campaign.content, contact);
+    
+    // Process template variables in subject - NEW CODE HERE
+    const personalizedSubject = processTemplateVariables(campaign.subject, contact);
     
     // Update delivery status to PENDING
     await prisma.emailDelivery.update({
@@ -75,11 +85,11 @@ async function sendEmailToContact(
       }
     });
     
-    // Send the email
+    // Send the email with personalized subject
     const result = await sendEmailViaSMTP(
       campaign.brevoKeyId,
       contact.email,
-      campaign.subject,
+      personalizedSubject, // Use personalized subject here
       personalizedHtml,
       {
         name: campaign.senderName,
@@ -187,6 +197,25 @@ async function processEmailQueue() {
         return;
       }
       
+      // CRITICAL FIX: Check if this is a scheduled campaign
+      if (campaign.status === 'SCHEDULED' && campaign.schedule) {
+        const now = new Date();
+        const scheduleTime = new Date(campaign.schedule);
+        
+        console.log(`Campaign ${data.campaignId} is scheduled for ${scheduleTime.toISOString()}`);
+        console.log(`Current time is ${now.toISOString()}`);
+        
+        // If the scheduled time is in the future, don't process it now
+        if (scheduleTime > now) {
+          console.log(`Campaign ${data.campaignId} is scheduled for future delivery. Not sending now.`);
+          console.log(`It will be processed by the scheduler worker at the scheduled time.`);
+          
+          // Acknowledge the message but don't process it
+          channel.ack(msg);
+          return;
+        }
+      }
+
       if (!campaign.brevoKeyId) {
         console.error(`Campaign ${data.campaignId} has no Brevo key assigned`);
         

@@ -45,3 +45,17 @@ services:
       - RABBITMQ_PORT=6015
       - RABBITMQ_USER=developer
       - RABBITMQ_PASSWORD=sekawan
+
+  analytics-worker:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile.analytics
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      - RABBITMQ_HOST=lunar.sekawan.co.id
+      - RABBITMQ_PORT=6015
+      - RABBITMQ_USER=developer
+      - RABBITMQ_PASSWORD=sekawan
+    depends_on:
+      - app

@@ -40,6 +40,23 @@ export async function POST(
       });
     }
     
+    // Additional validation
+    if (!campaign.subject || !campaign.senderName || !campaign.senderEmail) {
+      return new NextResponse(JSON.stringify({ 
+        error: "Campaign is missing required fields (subject, sender name, or sender email)" 
+      }), {
+        status: 400,
+      });
+    }
+    
+    if (!campaign.brevoKeyId) {
+      return new NextResponse(JSON.stringify({ 
+        error: "Campaign has no Brevo API key assigned" 
+      }), {
+        status: 400,
+      });
+    }
+    
     // Check if campaign is in a state that can be sent
     if (campaign.status !== 'DRAFT' && campaign.status !== 'SCHEDULED') {
       console.error(`Campaign ${campaignId} cannot be sent because its status is ${campaign.status}`);
@@ -50,16 +67,23 @@ export async function POST(
       });
     }
     
+    // Jika kampanye terjadwal dan ingin dikirim sekarang, hapus jadwal
+    if (campaign.status === 'SCHEDULED') {
+      console.log(`Removing schedule for campaign ${campaignId}`);
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { 
+          schedule: null
+        }
+      });
+    }
+    
     console.log(`Updating campaign ${campaignId} status to SENDING`);
     
     // Update campaign status to SENDING
     await prisma.campaign.update({
-      where: {
-        id: campaignId,
-      },
-      data: {
-        status: 'SENDING',
-      },
+      where: { id: campaignId },
+      data: { status: 'SENDING' },
     });
     
     console.log(`Sending campaign ${campaignId} to EMAIL_QUEUE for processing`);
@@ -72,7 +96,9 @@ export async function POST(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error sending campaign:", error);
-    return new NextResponse(JSON.stringify({ error: "Failed to send campaign" }), {
+    return new NextResponse(JSON.stringify({ 
+      error: error instanceof Error ? error.message : "Failed to send campaign" 
+    }), {
       status: 500,
     });
   }

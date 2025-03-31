@@ -63,6 +63,8 @@ model User {
   accounts      Account[]    // Add this relation
   sessions      Session[]    // Add this relation
   emailTemplates EmailTemplate[]
+
+  BrevoSender BrevoSender[]
 }
 model BrevoKey {
   id           String    @id @default(uuid())
@@ -79,6 +81,23 @@ model BrevoKey {
 
   @@index([userId])
 }
+
+model BrevoSender {
+  id                String   @id @default(uuid())
+  name              String
+  email             String
+  isVerified        Boolean  @default(false)
+  verificationStatus String?
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  campaigns         Campaign[]
+
+  @@unique([email, name, userId])
+  @@index([userId])
+}
+
 
 model Contact {
   id             String           @id @default(uuid())
@@ -121,18 +140,19 @@ model GroupContact {
   @@index([contactGroupId])
 }
 
-// prisma/schema.prisma (modified Campaign model)
 model Campaign {
   id           String       @id @default(uuid())
   name         String
   subject      String
   senderName   String
   senderEmail  String
-  content      String       // This will now store HTML content
+  content      String      
   status       CampaignStatus @default(DRAFT)
   schedule     DateTime?
   brevoKeyId   String?
-  brevoKey     BrevoKey?     @relation(fields: [brevoKeyId], references: [id])
+  brevoKey     BrevoKey?    @relation(fields: [brevoKeyId], references: [id])
+  brevoSenderId String?
+  brevoSender  BrevoSender? @relation(fields: [brevoSenderId], references: [id])
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId      String
@@ -142,6 +162,7 @@ model Campaign {
 
   @@index([userId])
   @@index([brevoKeyId])
+  @@index([brevoSenderId])
   @@index([groupId])
   EmailDelivery EmailDelivery[]
 }
@@ -154,7 +175,6 @@ enum CampaignStatus {
   FAILED
 }
 
-// prisma/schema.prisma - Add this model
 
 model EmailDelivery {
   id          String         @id @default(uuid())
