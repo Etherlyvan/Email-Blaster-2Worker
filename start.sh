@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Print environment information
+echo "Starting services with NODE_ENV: $NODE_ENV"
+
 # Start the Next.js app in the background
 echo "Starting Next.js application..."
 node server.js &
