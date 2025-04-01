@@ -182,7 +182,7 @@ export function ContactList({ contacts, view, onRefreshAction }: ContactListProp
           ))}
         </div>
         
-        {selectedContact && showDetailModal && (
+        {selectedContact && (
           <ContactDetail 
             contact={selectedContact} 
             isOpen={showDetailModal} 
@@ -362,7 +362,8 @@ export function ContactList({ contacts, view, onRefreshAction }: ContactListProp
         </table>
       </div>
       
-      {selectedContact && showDetailModal && (
+      {/* Contact Detail Popup */}
+      {selectedContact && (
         <ContactDetail 
           contact={selectedContact} 
           isOpen={showDetailModal} 
