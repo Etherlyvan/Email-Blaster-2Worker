@@ -33,8 +33,8 @@ COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/tsconfig.worker.json ./
 COPY --from=builder /app/package.json ./
 
-# Install ts-node globally for workers
-RUN npm install -g typescript ts-node
+# Install necessary dependencies for workers
+RUN npm install --no-save ts-node typescript @types/node @types/amqplib axios
 
 # Start script to run the main app and workers
 COPY start.sh ./

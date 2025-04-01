@@ -1,6 +1,47 @@
 // workers/analytics-worker.ts
 import { prisma } from '../lib/db';
-import { getEmailAnalytics } from '../lib/brevo';
+import { EmailStatus } from '@prisma/client';
+import axios, { AxiosError } from 'axios';
+
+// Interface for Brevo event
+interface BrevoEvent {
+  event: string;
+  date: string;
+  [key: string]: unknown;
+}
+
+// Interface for email delivery
+interface EmailDelivery {
+  id: string;
+  messageId: string | null;
+  contactId: string;
+  campaignId: string;
+  status: EmailStatus;
+  openedAt?: Date | null;
+  clickedAt?: Date | null;
+  errorMessage?: string | null;
+}
+
+// Interface for update data
+interface EmailDeliveryUpdateData {
+  status?: EmailStatus;
+  openedAt?: Date | null;
+  clickedAt?: Date | null;
+  errorMessage?: string | null;
+}
+
+// Maximum number of campaigns to process in one batch
+const MAX_CAMPAIGNS_PER_BATCH = 5;
+
+// Maximum number of message IDs to batch in a single request
+// Set to 1 since Brevo doesn't support batching multiple message IDs in a single request
+const MAX_MESSAGES_PER_BATCH = 1;
+
+// Delay between campaigns in milliseconds
+const DELAY_BETWEEN_CAMPAIGNS = 10000; // 10 seconds
+
+// Delay between API requests in milliseconds
+const DELAY_BETWEEN_REQUESTS = 500; // 0.5 seconds
 
 async function syncCampaignAnalytics() {
   try {
@@ -16,27 +57,40 @@ async function syncCampaignAnalytics() {
       },
       include: {
         brevoKey: true
-      }
+      },
+      orderBy: {
+        updatedAt: 'desc' // Process most recent campaigns first
+      },
+      take: 20 // Limit to 20 campaigns per run to avoid overwhelming the system
     });
     
     console.log(`Found ${recentCampaigns.length} recent campaigns to sync analytics`);
     
-    for (const campaign of recentCampaigns) {
-      if (!campaign.brevoKeyId) {
-        console.log(`Campaign ${campaign.id} has no Brevo key, skipping`);
-        continue;
-      }
+    // Process campaigns in smaller batches
+    for (let i = 0; i < recentCampaigns.length; i += MAX_CAMPAIGNS_PER_BATCH) {
+      const campaignBatch = recentCampaigns.slice(i, i + MAX_CAMPAIGNS_PER_BATCH);
       
-      try {
-        console.log(`Syncing analytics for campaign ${campaign.id}`);
-        await getEmailAnalytics(campaign.brevoKeyId, campaign.id);
-        console.log(`Successfully synced analytics for campaign ${campaign.id}`);
-      } catch (error) {
-        console.error(`Error syncing analytics for campaign ${campaign.id}:`, error);
-      }
+      console.log(`Processing batch of ${campaignBatch.length} campaigns (${i+1} to ${Math.min(i+MAX_CAMPAIGNS_PER_BATCH, recentCampaigns.length)} of ${recentCampaigns.length})`);
       
-      // Add a small delay between API calls to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Process each campaign in the batch
+      for (const campaign of campaignBatch) {
+        if (!campaign.brevoKeyId) {
+          console.log(`Campaign ${campaign.id} has no Brevo key, skipping`);
+          continue;
+        }
+        
+        try {
+          console.log(`Syncing analytics for campaign ${campaign.id}`);
+          await processCampaignAnalytics(campaign.brevoKeyId, campaign.id);
+          console.log(`Successfully synced analytics for campaign ${campaign.id}`);
+        } catch (error) {
+          console.error(`Error syncing analytics for campaign ${campaign.id}:`, error);
+        }
+        
+        // Add a delay between campaigns
+        console.log(`Waiting ${DELAY_BETWEEN_CAMPAIGNS/1000} seconds before processing next campaign...`);
+        await delay(DELAY_BETWEEN_CAMPAIGNS);
+      }
     }
     
     console.log('Analytics sync job completed');
@@ -45,16 +99,270 @@ async function syncCampaignAnalytics() {
   }
 }
 
+// Main function to process a single campaign's analytics
+async function processCampaignAnalytics(brevoKeyId: string, campaignId: string) {
+  // Get the Brevo key
+  const brevoKey = await findAndValidateBrevoKey(brevoKeyId);
+  
+  // Get the campaign with its deliveries
+  const campaign = await findAndValidateCampaign(campaignId);
+  
+  // Get all deliveries with message IDs
+  const deliveries = campaign.EmailDelivery.filter(d => d.messageId);
+  
+  console.log(`Processing ${deliveries.length} deliveries for campaign ${campaignId}`);
+  
+  // Process deliveries in batches to avoid rate limiting
+  for (let i = 0; i < deliveries.length; i += MAX_MESSAGES_PER_BATCH) {
+    const deliveryBatch = deliveries.slice(i, i + MAX_MESSAGES_PER_BATCH);
+    
+    if (i > 0 && i % 20 === 0) {
+      console.log(`Processed ${i} of ${deliveries.length} deliveries for campaign ${campaignId}`);
+    }
+    
+    // Process each delivery in the batch
+    for (const delivery of deliveryBatch) {
+      await processDelivery(brevoKey.apiKey, delivery);
+      
+      // Add a short delay between API requests to avoid rate limiting
+      await delay(DELAY_BETWEEN_REQUESTS);
+    }
+  }
+  
+  // Calculate campaign stats after processing all deliveries
+  const stats = await calculateCampaignStats(campaignId);
+  console.log(`Campaign ${campaignId} stats:`, stats);
+}
+
+// Helper function to find and validate Brevo key
+async function findAndValidateBrevoKey(brevoKeyId: string) {
+  const brevoKey = await prisma.brevoKey.findUnique({
+    where: { id: brevoKeyId },
+  });
+
+  if (!brevoKey) {
+    throw new Error('Brevo key not found');
+  }
+  
+  return brevoKey;
+}
+
+// Helper function to find and validate campaign
+async function findAndValidateCampaign(campaignId: string) {
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    include: {
+      EmailDelivery: true
+    }
+  });
+
+  if (!campaign) {
+    throw new Error('Campaign not found');
+  }
+  
+  return campaign;
+}
+
+// Process a single delivery
+async function processDelivery(apiKey: string, delivery: EmailDelivery) {
+  try {
+    if (!delivery.messageId) {
+      return null;
+    }
+    
+    // Fetch events for this delivery with retry logic
+    const events = await fetchDeliveryEvents(apiKey, delivery.messageId);
+    
+    // Process events to determine status
+    const { newStatus, updateData } = processDeliveryEvents(events, delivery.status);
+    
+    // Update delivery if needed
+    if (shouldUpdateDelivery(delivery.status, newStatus, updateData)) {
+      await updateDeliveryStatus(delivery.id, { ...updateData, status: newStatus });
+    }
+    
+    return {
+      contactId: delivery.contactId,
+      messageId: delivery.messageId,
+      events,
+      status: newStatus
+    };
+  } catch (error) {
+    console.error(`Error processing delivery ${delivery.id}:`, error);
+    return null;
+  }
+}
+
+// Interface for API error handling
+interface ApiErrorResponse {
+  status?: number;
+  headers?: Record<string, string>;
+}
+
+// Fetch events with retry logic
+async function fetchDeliveryEvents(apiKey: string, messageId: string, retryCount = 0): Promise<BrevoEvent[]> {
+  try {
+    const response = await axios.get(`https://api.brevo.com/v3/smtp/statistics/events`, {
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      params: {
+        messageId,
+      },
+    });
+    
+    return response.data.events ?? [];
+  } catch (error) {
+    // Handle rate limiting and other errors
+    const apiError = error as AxiosError;
+    const errorResponse = apiError.response as ApiErrorResponse | undefined;
+    
+    // Check if it's a rate limit error (429)
+    if (errorResponse?.status === 429) {
+      // Get reset time from headers, or use default of 10 seconds
+      const resetTimeHeader = errorResponse.headers?.['x-sib-ratelimit-reset'];
+      const resetTime = resetTimeHeader ? parseInt(resetTimeHeader, 10) : 10;
+      
+      console.log(`Rate limited. Waiting ${resetTime} seconds before retry for messageId ${messageId}`);
+      
+      // Wait for the reset time plus a small jitter
+      const jitter = Math.random() * 1000; // Add random 0-1000ms
+      await delay((resetTime * 1000) + jitter);
+      
+      // Retry with incremented retry count (max 3 retries)
+      if (retryCount < 3) {
+        console.log(`Retrying request for messageId ${messageId} (attempt ${retryCount + 1})`);
+        return fetchDeliveryEvents(apiKey, messageId, retryCount + 1);
+      }
+    }
+    
+    console.error(`Error fetching events for message ${messageId}:`, error);
+    return [];
+  }
+}
+
+// Process events to determine email status
+function processDeliveryEvents(events: BrevoEvent[], currentStatus: EmailStatus): {
+  newStatus: EmailStatus;
+  updateData: EmailDeliveryUpdateData;
+} {
+  // Split the complex function into smaller parts
+  const eventDates = extractEventDates(events);
+  return determineStatusFromEvents(eventDates, currentStatus);
+}
+
+// Extract dates from events by type
+function extractEventDates(events: BrevoEvent[]): {
+  openDates: Date[];
+  clickDates: Date[];
+  hasBounced: boolean;
+} {
+  const openDates: Date[] = [];
+  const clickDates: Date[] = [];
+  let hasBounced = false;
+  
+  for (const event of events) {
+    const eventDate = new Date(event.date);
+    
+    if (event.event === 'opened') {
+      openDates.push(eventDate);
+    } else if (event.event === 'clicked') {
+      clickDates.push(eventDate);
+    } else if (event.event === 'bounced') {
+      hasBounced = true;
+    }
+  }
+  
+  return { openDates, clickDates, hasBounced };
+}
+
+// Determine email status from processed events
+function determineStatusFromEvents(
+  eventDates: { openDates: Date[]; clickDates: Date[]; hasBounced: boolean },
+  currentStatus: EmailStatus
+): { newStatus: EmailStatus; updateData: EmailDeliveryUpdateData } {
+  const { openDates, clickDates, hasBounced } = eventDates;
+  const updateData: EmailDeliveryUpdateData = {};
+  let newStatus = currentStatus;
+  
+  // Get latest dates if available
+  const latestOpenDate = openDates.length > 0 
+    ? new Date(Math.max(...openDates.map(d => d.getTime())))
+    : null;
+    
+  const latestClickDate = clickDates.length > 0
+    ? new Date(Math.max(...clickDates.map(d => d.getTime())))
+    : null;
+  
+  // Determine status based on events
+  if (clickDates.length > 0) {
+    newStatus = 'CLICKED';
+    updateData.clickedAt = latestClickDate;
+  } else if (openDates.length > 0) {
+    newStatus = 'OPENED';
+    updateData.openedAt = latestOpenDate;
+  } else if (hasBounced) {
+    newStatus = 'BOUNCED';
+  }
+  
+  return { newStatus, updateData };
+}
+
+// Check if delivery needs to be updated
+function shouldUpdateDelivery(
+  currentStatus: EmailStatus, 
+  newStatus: EmailStatus, 
+  updateData: EmailDeliveryUpdateData
+): boolean {
+  return newStatus !== currentStatus || 
+         !!updateData.clickedAt || 
+         !!updateData.openedAt;
+}
+
+// Update delivery status in database
+async function updateDeliveryStatus(deliveryId: string, updateData: EmailDeliveryUpdateData) {
+  await prisma.emailDelivery.update({
+    where: { id: deliveryId },
+    data: updateData
+  });
+}
+
+// Calculate campaign stats
+async function calculateCampaignStats(campaignId: string) {
+  const stats = await prisma.emailDelivery.groupBy({
+    by: ['status'],
+    where: { campaignId },
+    _count: true
+  });
+  
+  // Create an accumulator to store the count for each status
+  return stats.reduce((acc: Record<string, number>, stat) => {
+    acc[stat.status] = stat._count;
+    return acc;
+  }, {} as Record<string, number>);
+}
+
+// Helper function for delay
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Run the sync job every hour
 const SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 async function startAnalyticsSyncJob() {
+  console.log('Starting initial analytics sync...');
+  
   // Run immediately on startup
   await syncCampaignAnalytics();
   
   // Then set up recurring interval
+  console.log(`Setting up recurring analytics sync every ${SYNC_INTERVAL / 1000 / 60} minutes`);
+  
   setInterval(async () => {
     try {
+      console.log('Running scheduled analytics sync...');
       await syncCampaignAnalytics();
     } catch (error) {
       console.error('Error in scheduled analytics sync:', error);
