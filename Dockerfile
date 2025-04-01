@@ -32,11 +32,14 @@ COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/tsconfig.worker.json ./
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
 
-# Install necessary dependencies for workers
-RUN npm install --no-save ts-node typescript @types/node @types/amqplib axios
+# Make sure ts-node is properly installed
+RUN npm install -g ts-node typescript
+RUN npm install --no-save @types/node @types/amqplib axios amqplib
 
 # Start script to run the main app and workers
+RUN npm run build-workers
 COPY start.sh ./
 RUN chmod +x ./start.sh
 

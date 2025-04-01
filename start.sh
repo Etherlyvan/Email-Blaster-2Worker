@@ -11,20 +11,17 @@ NEXTJS_PID=$!
 # Wait a moment to ensure Next.js has started
 sleep 5
 
-# Use the locally installed ts-node from node_modules
-TS_NODE_BIN="./node_modules/.bin/ts-node"
-
-# Start the workers in the background with proper error handling
+# Start the workers in the background
 echo "Starting email worker..."
-$TS_NODE_BIN --project tsconfig.worker.json workers/email-worker.ts &
+node dist/workers/email-worker.js &
 EMAIL_WORKER_PID=$!
 
 echo "Starting scheduler worker..."
-$TS_NODE_BIN --project tsconfig.worker.json workers/scheduler-worker.ts &
+node dist/workers/scheduler-worker.js &
 SCHEDULER_WORKER_PID=$!
 
 echo "Starting analytics worker..."
-$TS_NODE_BIN --project tsconfig.worker.json workers/analytics-worker.ts &
+node dist/workers/analytics-worker.js &
 ANALYTICS_WORKER_PID=$!
 
 # Function to check if a process is still running in Alpine Linux
@@ -47,19 +44,19 @@ while true; do
   
   if ! is_running $EMAIL_WORKER_PID; then
     echo "Email worker crashed, restarting..."
-    $TS_NODE_BIN --project tsconfig.worker.json workers/email-worker.ts &
+    node dist/workers/email-worker.js &
     EMAIL_WORKER_PID=$!
   fi
   
   if ! is_running $SCHEDULER_WORKER_PID; then
     echo "Scheduler worker crashed, restarting..."
-    $TS_NODE_BIN --project tsconfig.worker.json workers/scheduler-worker.ts &
+    node dist/workers/scheduler-worker.js &
     SCHEDULER_WORKER_PID=$!
   fi
   
   if ! is_running $ANALYTICS_WORKER_PID; then
     echo "Analytics worker crashed, restarting..."
-    $TS_NODE_BIN --project tsconfig.worker.json workers/analytics-worker.ts &
+    node dist/workers/analytics-worker.js &
     ANALYTICS_WORKER_PID=$!
   fi
   

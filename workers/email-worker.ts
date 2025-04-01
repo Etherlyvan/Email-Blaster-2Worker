@@ -3,7 +3,6 @@ import { connectToRabbitMQ, EMAIL_QUEUE } from '../lib/rabbitmq';
 import { sendEmailViaSMTP } from '../lib/brevo';
 import { prisma } from '../lib/db';
 import type { Campaign, CampaignStatus } from '@prisma/client';
-import * as amqplib from 'amqplib';
 
 // Global error handler
 process.on('uncaughtException', (error) => {
@@ -18,12 +17,7 @@ interface ContactData {
   [key: string]: unknown;
 }
 
-// Updated interface with all required properties
 interface CampaignWithRelations extends Campaign {
-  id: string; // Explicitly include id
-  subject: string; // Explicitly include subject
-  status: CampaignStatus; // Explicitly include status
-  schedule: Date | null; // Explicitly include schedule
   group: {
     groupContacts: Array<{
       contact: ContactData;
@@ -33,6 +27,7 @@ interface CampaignWithRelations extends Campaign {
   content: string;
   senderName: string;
   senderEmail: string;
+  subject: string; // Added missing subject field
 }
 
 /**
@@ -175,183 +170,169 @@ function determineCampaignStatus(successCount: number, failureCount: number, tot
   return 'FAILED';
 }
 
-// Split the main function to reduce complexity
-async function processCampaign(
-  campaignId: string, 
-  typedChannel: amqplib.Channel, 
-  msg: amqplib.ConsumeMessage
-): Promise<void> {
+// Process a campaign message
+async function processCampaign(campaignId: string, channel: any, msg: any): Promise<void> {
   console.log('Processing email task:', campaignId);
   
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    include: {
-      group: {
-        include: {
-          groupContacts: {
-            include: {
-              contact: true,
+  try {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        group: {
+          include: {
+            groupContacts: {
+              include: {
+                contact: true,
+              },
             },
           },
         },
       },
-    },
-  }) as CampaignWithRelations | null;
-  
-  if (!campaign) {
-    console.error(`Campaign ${campaignId} not found`);
-    // Acknowledge anyway since retrying won't help if campaign doesn't exist
-    typedChannel.ack(msg);
-    return;
-  }
-  
-  // Check if this is a scheduled campaign
-  if (campaign.status === 'SCHEDULED' && campaign.schedule) {
-    const now = new Date();
-    const scheduleTime = new Date(campaign.schedule);
+    }) as CampaignWithRelations | null;
     
-    console.log(`Campaign ${campaignId} is scheduled for ${scheduleTime.toISOString()}`);
-    console.log(`Current time is ${now.toISOString()}`);
-    
-    // If the scheduled time is in the future, don't process it now
-    if (scheduleTime > now) {
-      console.log(`Campaign ${campaignId} is scheduled for future delivery. Not sending now.`);
-      console.log(`It will be processed by the scheduler worker at the scheduled time.`);
-      
-      // Acknowledge the message but don't process it
-      typedChannel.ack(msg);
+    if (!campaign) {
+      console.error(`Campaign ${campaignId} not found`);
+      // Acknowledge anyway since retrying won't help if campaign doesn't exist
+      channel.ack(msg);
       return;
     }
-  }
-
-  if (!campaign.brevoKeyId) {
-    console.error(`Campaign ${campaignId} has no Brevo key assigned`);
     
-    // Update campaign status to FAILED
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'FAILED' as CampaignStatus },
-    });
+    // Check if this is a scheduled campaign
+    if (campaign.status === 'SCHEDULED' && campaign.schedule) {
+      const now = new Date();
+      const scheduleTime = new Date(campaign.schedule);
+      
+      console.log(`Campaign ${campaignId} is scheduled for ${scheduleTime.toISOString()}`);
+      console.log(`Current time is ${now.toISOString()}`);
+      
+      // If the scheduled time is in the future, don't process it now
+      if (scheduleTime > now) {
+        console.log(`Campaign ${campaignId} is scheduled for future delivery. Not sending now.`);
+        console.log(`It will be processed by the scheduler worker at the scheduled time.`);
+        
+        // Acknowledge the message but don't process it
+        channel.ack(msg);
+        return;
+      }
+    }
+  
+    if (!campaign.brevoKeyId) {
+      console.error(`Campaign ${campaignId} has no Brevo key assigned`);
+      
+      // Update campaign status to FAILED
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'FAILED' as CampaignStatus },
+      });
+      
+      channel.ack(msg);
+      return;
+    }
     
-    typedChannel.ack(msg);
-    return;
-  }
-  
-  // Update campaign status to SENDING if not already
-  if (campaign.status !== 'SENDING') {
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'SENDING' as CampaignStatus },
-    });
-  }
-  
-  // Get contacts in the group
-  const contacts = campaign.group.groupContacts.map(gc => gc.contact);
-  console.log(`Campaign ${campaignId} has ${contacts.length} contacts to process`);
-  
-  if (contacts.length === 0) {
-    console.warn(`Campaign ${campaignId} has no contacts to send to`);
+    // Update campaign status to SENDING if not already
+    if (campaign.status !== 'SENDING') {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'SENDING' as CampaignStatus },
+      });
+    }
     
-    // Update campaign status to SENT (since there's nothing to send)
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'SENT' as CampaignStatus },
-    });
+    // Get contacts in the group
+    const contacts = campaign.group.groupContacts.map(gc => gc.contact);
+    console.log(`Campaign ${campaignId} has ${contacts.length} contacts to process`);
     
-    typedChannel.ack(msg);
-    return;
-  }
-  
-  await sendEmailsToCampaignContacts(campaign, contacts, typedChannel, msg);
-}
-
-async function sendEmailsToCampaignContacts(
-  campaign: CampaignWithRelations, 
-  contacts: ContactData[], 
-  typedChannel: amqplib.Channel, 
-  msg: amqplib.ConsumeMessage
-): Promise<void> {
-  // Create delivery records for all contacts in the campaign
-  await prisma.$transaction(
-    contacts.map(contact => 
-      prisma.emailDelivery.upsert({
-        where: {
-          campaignId_contactId: {
+    if (contacts.length === 0) {
+      console.warn(`Campaign ${campaignId} has no contacts to send to`);
+      
+      // Update campaign status to SENT (since there's nothing to send)
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'SENT' as CampaignStatus },
+      });
+      
+      channel.ack(msg);
+      return;
+    }
+    
+    // Create delivery records for all contacts in the campaign
+    await prisma.$transaction(
+      contacts.map(contact => 
+        prisma.emailDelivery.upsert({
+          where: {
+            campaignId_contactId: {
+              campaignId: campaign.id,
+              contactId: contact.id
+            }
+          },
+          update: {
+            status: 'PENDING'
+          },
+          create: {
             campaignId: campaign.id,
-            contactId: contact.id
+            contactId: contact.id,
+            status: 'PENDING'
           }
-        },
-        update: {
-          status: 'PENDING'
-        },
-        create: {
-          campaignId: campaign.id,
-          contactId: contact.id,
-          status: 'PENDING'
-        }
-      })
-    )
-  );
-
-  // Track campaign progress
-  let successCount = 0;
-  let failureCount = 0;
-  const totalCount = contacts.length;
+        })
+      )
+    );
   
-  // Send emails to all contacts in the group
-  for (const contact of contacts) {
-    const result = await sendEmailToContact(campaign, contact);
+    // Track campaign progress
+    let successCount = 0;
+    let failureCount = 0;
+    const totalCount = contacts.length;
     
-    if (result.success) {
-      successCount++;
-    } else {
-      failureCount++;
+    // Send emails to all contacts in the group
+    for (const contact of contacts) {
+      const result = await sendEmailToContact(campaign, contact);
+      
+      if (result.success) {
+        successCount++;
+      } else {
+        failureCount++;
+      }
+      
+      // Update campaign progress
+      const progress = Math.round(((successCount + failureCount) / totalCount) * 100);
+      console.log(`Campaign ${campaign.id} progress: ${progress}% (${successCount} sent, ${failureCount} failed)`);
+      
+      // Add a small delay between emails to avoid overwhelming the SMTP server
+      if (contacts.length > 10) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
     
-    // Update campaign progress
-    const progress = Math.round(((successCount + failureCount) / totalCount) * 100);
-    console.log(`Campaign ${campaign.id} progress: ${progress}% (${successCount} sent, ${failureCount} failed)`);
+    // Update campaign status based on results
+    const finalStatus = determineCampaignStatus(successCount, failureCount, totalCount);
     
-    // Add a small delay between emails to avoid overwhelming the SMTP server
-    if (contacts.length > 10) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { status: finalStatus },
+    });
+    
+    console.log(`Campaign ${campaign.id} completed with status: ${finalStatus}`);
+    console.log(`Success: ${successCount}, Failed: ${failureCount}, Total: ${totalCount}`);
+    
+    channel.ack(msg);
+  } catch (error) {
+    console.error(`Error processing campaign ${campaignId}:`, error);
+    // Nack the message without requeue to avoid infinite retries
+    channel.nack(msg, false, false);
   }
-  
-  // Update campaign status based on results
-  const finalStatus = determineCampaignStatus(successCount, failureCount, totalCount);
-  
-  await prisma.campaign.update({
-    where: { id: campaign.id },
-    data: { status: finalStatus },
-  });
-  
-  console.log(`Campaign ${campaign.id} completed with status: ${finalStatus}`);
-  console.log(`Success: ${successCount}, Failed: ${failureCount}, Total: ${totalCount}`);
-  
-  typedChannel.ack(msg);
 }
 
 async function processEmailQueue() {
   try {
     const result = await connectToRabbitMQ();
-    
-    // Use unknown as an intermediate step to satisfy TypeScript
-    const channelUnknown = result.channel as unknown;
-    const connectionUnknown = result.connection as unknown;
-    
-    // Then cast to the expected type
-    const typedChannel = channelUnknown as amqplib.Channel;
-    const typedConnection = connectionUnknown as amqplib.Connection;
+    const channel = result.channel;
     
     console.log('Email worker started, waiting for messages...');
     
-    typedChannel.consume(EMAIL_QUEUE, async (msg) => {
+    channel.consume(EMAIL_QUEUE, async (msg) => {
       if (!msg) return;
       
       try {
         const data = JSON.parse(msg.content.toString());
-        await processCampaign(data.campaignId, typedChannel, msg);
+        await processCampaign(data.campaignId, channel, msg);
       } catch (error) {
         console.error('Error processing email task:', error);
         
@@ -366,21 +347,13 @@ async function processEmailQueue() {
           console.error('Failed to update campaign status:', e);
         }
         
-        // Determine if this is a transient error that should be retried
-        const isTransientError = error instanceof Error && (
-          error.message.includes('ETIMEDOUT') ||
-          error.message.includes('ECONNRESET') ||
-          error.message.includes('ECONNREFUSED') ||
-          error.message.includes('socket hang up')
-        );
-        
-        // Requeue only for transient errors
-        typedChannel.nack(msg, false, isTransientError);
+        // Nack without requeue to avoid infinite retries
+        channel.nack(msg, false, false);
       }
     });
     
-    // Add reconnection logic
-    typedConnection.on('close', async () => {
+    // Handle reconnection logic
+    result.connection.on('close', async () => {
       console.error('RabbitMQ connection closed unexpectedly, reconnecting in 5 seconds...');
       await new Promise(resolve => setTimeout(resolve, 5000));
       processEmailQueue(); // Restart the process
@@ -410,5 +383,12 @@ process.on('SIGTERM', async () => {
 console.log('Starting email worker...');
 processEmailQueue().catch(error => {
   console.error('Fatal error in email worker:', error);
-  process.exit(1);
+  // Don't exit the process, let the start.sh script restart it
+  // Instead, try to reconnect after a delay
+  setTimeout(() => {
+    console.log('Attempting to restart email worker after fatal error...');
+    processEmailQueue().catch(err => {
+      console.error('Failed to restart email worker:', err);
+    });
+  }, 10000);
 });
