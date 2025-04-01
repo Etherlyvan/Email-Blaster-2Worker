@@ -18,7 +18,12 @@ interface ContactData {
   [key: string]: unknown;
 }
 
+// Updated interface with all required properties
 interface CampaignWithRelations extends Campaign {
+  id: string; // Explicitly include id
+  subject: string; // Explicitly include subject
+  status: CampaignStatus; // Explicitly include status
+  schedule: Date | null; // Explicitly include schedule
   group: {
     groupContacts: Array<{
       contact: ContactData;
