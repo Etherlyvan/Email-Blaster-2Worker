@@ -24,10 +24,13 @@ echo "Starting analytics worker..."
 ts-node --project tsconfig.worker.json workers/analytics-worker.ts &
 ANALYTICS_WORKER_PID=$!
 
-# Function to check if a process is still running
+# Function to check if a process is still running in Alpine Linux
 is_running() {
-  ps -p $1 > /dev/null
-  return $?
+  if [ -d "/proc/$1" ]; then
+    return 0  # Process is running
+  else
+    return 1  # Process is not running
+  fi
 }
 
 # Monitor all processes
