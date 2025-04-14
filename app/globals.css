@@ -1,0 +1,218 @@
+@import "tailwindcss";
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 245, 245, 245;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+}
+
+.rdw-editor-wrapper {
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.rdw-editor-toolbar {
+  border-top-left-radius: 0.375rem;
+  border-top-right-radius: 0.375rem;
+  border: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.rdw-editor-main {
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  min-height: 200px;
+  padding: 0.5rem;
+}
+
+/* Add to app/globals.css */
+.email-content-preview {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.email-content-preview img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-content-preview a {
+  color: #0070f3;
+  text-decoration: underline;
+}
+
+.email-content-preview h1,
+.email-content-preview h2,
+.email-content-preview h3,
+.email-content-preview h4,
+.email-content-preview h5,
+.email-content-preview h6 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.email-content-preview p {
+  margin-bottom: 1em;
+}
+
+.email-content-preview ul,
+.email-content-preview ol {
+  margin-bottom: 1em;
+  padding-left: 2em;
+}
+
+/* Add to app/globals.css */
+.template-variable {
+  background-color: #ffe066;
+  padding: 0 2px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.template-variables-dropdown {
+  position: absolute;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 50;
+  max-height: 200px;
+  overflow-y: auto;
+  width: 200px;
+}
+
+.template-variable-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.template-variable-item:hover {
+  background-color: #f3f4f6;
+}
+
+
+/* Drag and drop styles */
+.drag-over {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 2px dashed #3b82f6;
+}
+
+.dragging {
+  opacity: 0.6;
+  cursor: move;
+}
+
+.component-placeholder {
+  border: 2px dashed #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 16px;
+  border-radius: 4px;
+  text-align: center;
+  color: #3b82f6;
+  margin: 8px 0;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.component-ghost {
+  opacity: 0.5;
+  background: #f0f4ff;
+  border: 1px solid #3b82f6;
+}
+
+/* Visual editor styles */
+.email-section {
+  position: relative;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.email-section:hover {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.section-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.email-section:hover .section-controls {
+  display: flex;
+}
+
+.section-handle {
+  cursor: move;
+  padding: 4px;
+  background: #f3f4f6;
+  border-radius: 4px 0 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section-buttons {
+  display: flex;
+}
+
+.section-button {
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.section-button:hover {
+  color: #1d4ed8;
+  background: #f3f4f6;
+}
+
+.section-button.delete:hover {
+  color: #dc2626;
+}
+
+/* Image dropzone */
+.image-dropzone {
+  border: 2px dashed #d1d5db;
+  border-radius: 4px;
+  padding: 24px;
+  text-align: center;
+  background-color: #f9fafb;
+  transition: all 0.2s ease;
+}
+
+.image-dropzone.active {
+  border-color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.image-dropzone-text {
+  color: #6b7280;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+/* Add to globals.css */
+select, option {
+  font-family: inherit;
+}
